@@ -1,0 +1,704 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantType {
+  B2B
+  B2C
+  HYBRID
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+  CANCELLED
+}
+
+// ============================================
+// TENANT & USER MANAGEMENT
+// ============================================
+
+model Tenant {
+  id        String       @id @default(uuid())
+  name      String
+  slug      String       @unique
+  type      TenantType   @default(B2B)
+  status    TenantStatus @default(TRIAL)
+  plan      String? // e.g., "starter", "professional", "enterprise"
+  quota     Json? // Usage limits: { customers: 10000, deals: 500, ... }
+  metadata  Json? // Additional tenant config
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relations
+  tenantUsers    TenantUser[]
+  roles          Role[]
+  featureFlags   FeatureFlag[]
+  customers      Customer[]
+  customerEvents CustomerEvent[]
+  segments       Segment[]
+  tags           Tag[]
+  customerTags   CustomerTag[]
+  leads          Lead[]
+  deals          Deal[]
+  dealStages     DealStage[]
+  activities     ActivityTask[]
+  accounts       Account[]
+  contacts       Contact[]
+  quotations     Quotation[]
+  billings       Billing[]
+  csats          Csat[]
+  lineEvents     LineEvent[]
+  lineFollowers  LineFollower[]
+  facebookSyncs  FacebookSync[]
+  auditLogs      AuditLog[]
+
+  @@index([slug])
+  @@index([status])
+  @@map("tenants")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  status       UserStatus @default(ACTIVE)
+  isSuperAdmin Boolean    @default(false)
+  metadata     Json?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  tenantUsers TenantUser[]
+  auditLogs   AuditLog[]
+
+  @@index([email])
+  @@index([isSuperAdmin])
+  @@map("users")
+}
+
+model TenantUser {
+  id        String     @id @default(uuid())
+  tenantId  String
+  userId    String
+  status    UserStatus @default(ACTIVE)
+  metadata  Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles  TenantUserRole[]
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_users")
+}
+
+// ============================================
+// RBAC
+// ============================================
+
+model Role {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  slug        String
+  description String?
+  isSystem    Boolean  @default(false) // System roles cannot be deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions     RolePermission[]
+  tenantUserRoles TenantUserRole[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  resource    String // e.g., "customer", "deal", "segment"
+  action      String // e.g., "read", "write", "delete"
+  description String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@map("role_permissions")
+}
+
+model TenantUserRole {
+  id           String   @id @default(uuid())
+  tenantUserId String
+  roleId       String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  tenantUser TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantUserId, roleId])
+  @@index([tenantUserId])
+  @@index([roleId])
+  @@map("tenant_user_roles")
+}
+
+// ============================================
+// FEATURE FLAGS
+// ============================================
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  tenantId  String
+  key       String
+  enabled   Boolean  @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([tenantId, key])
+  @@map("feature_flags")
+}
+
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  actorUserId String?
+  action      String // e.g., "create", "update", "delete"
+  entity      String // e.g., "customer", "deal"
+  entityId    String?
+  payload     Json? // Before/after state
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor  User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([actorUserId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// CDP MODELS
+// ============================================
+
+model Customer {
+  id          String   @id @default(uuid())
+  tenantId    String
+  type        String   @default("INDIVIDUAL") // INDIVIDUAL, COMPANY
+  identifiers Json // { email: "...", phone: "...", externalId: "..." }
+  profile     Json // Flexible profile data
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events        CustomerEvent[]
+  tags          CustomerTag[]
+  deals         Deal[]
+  activities    ActivityTask[]
+  contacts      Contact[]
+  quotations    Quotation[]
+  billings      Billing[]
+  lineEvents    LineEvent[]
+  lineFollowers LineFollower[]
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@map("customers")
+}
+
+model CustomerEvent {
+  id         String   @id @default(uuid())
+  tenantId   String
+  customerId String
+  type       String // e.g., "page_view", "purchase", "email_opened"
+  timestamp  DateTime @default(now())
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, type])
+  @@index([tenantId, timestamp])
+  @@map("customer_events")
+}
+
+model Segment {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  definition  Json // Query definition for dynamic segments
+  isDynamic   Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("segments")
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  color       String? // Hex color
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerTags CustomerTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("tags")
+}
+
+model CustomerTag {
+  id         String   @id @default(uuid())
+  tenantId   String
+  customerId String
+  tagId      String
+  createdAt  DateTime @default(now())
+
+  // Relations
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, tagId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([tagId])
+  @@map("customer_tags")
+}
+
+// ============================================
+// CRM MODELS
+// ============================================
+
+model Lead {
+  id        String   @id @default(uuid())
+  tenantId  String
+  firstName String?
+  lastName  String?
+  email     String?
+  phone     String?
+  company   String?
+  title     String?
+  source    String? // e.g., "website", "referral", "cold_call"
+  status    String   @default("NEW") // NEW, CONTACTED, QUALIFIED, CONVERTED, LOST
+  score     Int? // Lead score
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("leads")
+}
+
+model DealStage {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  order       Int      @default(0)
+  probability Int? // 0-100
+  isDefault   Boolean  @default(false)
+  isWon       Boolean  @default(false)
+  isLost      Boolean  @default(false)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deals  Deal[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, order])
+  @@map("deal_stages")
+}
+
+model Deal {
+  id                String     @id @default(uuid())
+  tenantId          String
+  customerId        String?
+  accountId         String?
+  title             String
+  description       String?
+  amount            Decimal?   @db.Decimal(15, 2)
+  currency          String     @default("USD")
+  stageId           String
+  status            DealStatus @default(OPEN)
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  metadata          Json?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  // Relations
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  account    Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  stage      DealStage      @relation(fields: [stageId], references: [id])
+  activities ActivityTask[]
+
+  @@index([tenantId])
+  @@index([tenantId, stageId])
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, accountId])
+  @@map("deals")
+}
+
+model ActivityTask {
+  id          String    @id @default(uuid())
+  tenantId    String
+  type        String // e.g., "call", "email", "meeting", "note", "task"
+  title       String
+  description String?
+  dueDate     DateTime?
+  completedAt DateTime?
+  priority    String    @default("MEDIUM") // LOW, MEDIUM, HIGH
+  status      String    @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  customerId  String?
+  dealId      String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  deal     Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+  @@index([tenantId, customerId])
+  @@index([tenantId, dealId])
+  @@map("activity_tasks")
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  type      String? // e.g., "CUSTOMER", "PARTNER", "VENDOR"
+  industry  String?
+  website   String?
+  phone     String?
+  email     String?
+  address   Json? // { street, city, state, zip, country }
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountContacts AccountContact[]
+  deals           Deal[]
+
+  @@index([tenantId])
+  @@index([tenantId, name])
+  @@map("accounts")
+}
+
+model Contact {
+  id         String   @id @default(uuid())
+  tenantId   String
+  customerId String?
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  title      String?
+  department String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  accountContacts AccountContact[]
+
+  @@index([tenantId])
+  @@index([tenantId, email])
+  @@index([tenantId, customerId])
+  @@map("contacts")
+}
+
+model AccountContact {
+  id        String   @id @default(uuid())
+  accountId String
+  contactId String
+  role      String? // e.g., "PRIMARY", "DECISION_MAKER", "INFLUENCER"
+  createdAt DateTime @default(now())
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, contactId])
+  @@index([accountId])
+  @@index([contactId])
+  @@map("account_contacts")
+}
+
+model Quotation {
+  id              String    @id @default(uuid())
+  tenantId        String
+  quotationNumber String    @unique
+  customerId      String?
+  customerName    String
+  customerEmail   String?
+  customerPhone   String?
+  amount          Decimal   @db.Decimal(15, 2)
+  currency        String    @default("THB")
+  status          String    @default("PENDING") // PENDING, ACCEPTED, APPROVED, REJECTED, CANCELLED
+  issueDate       DateTime
+  validUntil      DateTime?
+  description     String?
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, quotationNumber])
+  @@index([tenantId, customerId])
+  @@map("quotations")
+}
+
+model Billing {
+  id            String    @id @default(uuid())
+  tenantId      String
+  invoiceNumber String    @unique
+  customerId    String?
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  amount        Decimal   @db.Decimal(15, 2)
+  currency      String    @default("THB")
+  status        String    @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
+  issueDate     DateTime
+  dueDate       DateTime?
+  paidDate      DateTime?
+  description   String?
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, invoiceNumber])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+  @@map("billings")
+}
+
+model Csat {
+  id            String   @id @default(uuid())
+  tenantId      String
+  externalId    String
+  project       String
+  score         Int
+  comment       String?
+  customerName  String?
+  customerEmail String?
+  customerPhone String?
+  submittedAt   DateTime
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, externalId])
+  @@index([tenantId])
+  @@index([tenantId, project])
+  @@index([tenantId, submittedAt])
+  @@map("csat")
+}
+
+model LineEvent {
+  id                String    @id @default(uuid())
+  tenantId          String
+  eventType         String // message, follow, unfollow, join, leave, postback, beacon, accountLink
+  sourceType        String?
+  sourceId          String?
+  userId            String?
+  groupId           String?
+  roomId            String?
+  timestamp         DateTime
+  mode              String?
+  replyToken        String?
+  messageType       String?
+  messageText       String?
+  messageId         String?
+  postbackData      String?
+  postbackParams    Json?
+  beaconHwid        String?
+  beaconType        String?
+  accountLinkResult String?
+  rawPayload        Json?
+  status            String    @default("RECEIVED") // RECEIVED, PROCESSED, FAILED
+  processedAt       DateTime?
+  errorMessage      String?
+  customerId        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, eventType])
+  @@index([tenantId, timestamp])
+  @@index([tenantId, userId])
+  @@index([tenantId, status])
+  @@map("line_events")
+}
+
+model LineFollower {
+  id           String    @id @default(uuid())
+  tenantId     String
+  userId       String // LINE User ID
+  displayName  String?
+  pictureUrl   String?
+  status       String    @default("FOLLOW") // FOLLOW, UNFOLLOW
+  isUnblocked  Boolean   @default(false) // true if user unblocked the OA
+  followedAt   DateTime  @default(now())
+  unfollowedAt DateTime?
+  metadata     Json? // Additional data: source, campaign, etc.
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerId String? // Link to customer if matched
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, followedAt])
+  @@index([tenantId, userId])
+  @@map("line_followers")
+}
+
+model FacebookSync {
+  id              String   @id @default(uuid())
+  tenantId        String
+  pageId          String   // Facebook Page ID (usually 1 page per tenant)
+  pageName        String?  // Facebook Page Name
+  conversationId  String   // Messenger Conversation ID
+  messageId       String   // Messenger Message ID
+  postId          String?  // Facebook Post ID (if message came from Post Ads click)
+  senderId        String?  // Sender User ID
+  senderName      String?  // Sender Name
+  messageText     String?  // Message content
+  messageType     String   @default("text") // text, image, attachment, etc.
+  timestamp       DateTime // Message timestamp
+  syncedAt        DateTime @default(now()) // When synced to our system
+  metadata        Json?    // Additional data (attachments, reactions, etc.)
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, messageId])
+  @@index([tenantId])
+  @@index([tenantId, pageId])
+  @@index([tenantId, conversationId])
+  @@index([tenantId, postId])
+  @@index([tenantId, timestamp])
+  @@map("facebook_sync")
+}

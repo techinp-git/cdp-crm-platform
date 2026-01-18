@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ydm-postgres-dev
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ydm_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ydm-network-dev
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/management-api/Dockerfile.dev
+    container_name: ydm-api-dev
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ydm_platform?schema=public
+      JWT_SECRET: dev-secret-key-change-in-production
+      JWT_EXPIRES_IN: 1h
+      PORT: 3000
+      NODE_ENV: development
+      CORS_ORIGIN: http://localhost:3001,http://localhost:3002
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/management-api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ydm-network-dev
+    command: sh -c "cd prisma && npm install 2>/dev/null || true && npx prisma generate && cd /app && npm install @prisma/client 2>/dev/null || true && cd apps/management-api && npm install tsx --save-dev 2>/dev/null || true && npm run dev"
+
+  frontend-client:
+    build:
+      context: .
+      dockerfile: apps/frontend-client/Dockerfile.dev
+    container_name: ydm-client-dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/frontend-client/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    networks:
+      - ydm-network-dev
+    command: npm run dev --workspace=apps/frontend-client
+
+  frontend-admin:
+    build:
+      context: .
+      dockerfile: apps/frontend-admin/Dockerfile.dev
+    container_name: ydm-admin-dev
+    ports:
+      - "3002:3002"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/apps/frontend-admin/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    networks:
+      - ydm-network-dev
+    command: npm run dev --workspace=apps/frontend-admin
+
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: apps/management-api/Dockerfile.dev
+    container_name: ydm-prisma-studio-dev
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ydm_platform?schema=public
+    ports:
+      - "5555:5555"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/prisma/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ydm-network-dev
+    command: sh -c "cd /app/prisma && npm install 2>/dev/null || true && npx prisma generate && npx prisma studio --hostname 0.0.0.0 --port 5555"
+
+volumes:
+  postgres_data_dev:
+
+networks:
+  ydm-network-dev:
+    driver: bridge

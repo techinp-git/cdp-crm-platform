@@ -1,0 +1,24 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install dependencies including OpenSSL for Prisma
+RUN apk add --no-cache libc6-compat openssl openssl-dev
+
+# Copy package files
+COPY package.json package-lock.json* ./
+COPY apps/management-api/package.json ./apps/management-api/
+COPY packages ./packages/
+COPY prisma ./prisma/
+
+# Install all dependencies
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Start development server
+CMD ["npm", "run", "dev", "--workspace=apps/management-api"]
