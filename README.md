@@ -320,3 +320,4 @@ npm run db:studio       # Open Prisma Studio
 ## 🤝 Contributing
 
 [Contributing Guidelines]
+# cdp-crm-platform
