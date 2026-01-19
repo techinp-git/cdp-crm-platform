@@ -4,6 +4,8 @@
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
+  // Support running Prisma on both Mac (local dev) and Linux (containers)
+  binaryTargets = ["native", "darwin-arm64", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
@@ -71,6 +73,19 @@ model Tenant {
   quotations     Quotation[]
   billings       Billing[]
   csats          Csat[]
+  lineContents   LineContent[]
+  messengerContents MessengerContent[]
+  emailContents  EmailContent[]
+  smsContents    SmsContent[]
+  messageBroadcasts MessageBroadcast[]
+  messageDeliveries MessageDelivery[]
+  messageImmediates MessageImmediate[]
+  chatAutoRules  ChatAutoRule[]
+  chatAutoLogs   ChatAutoLog[]
+  chatAutoOutbox ChatAutoOutbox[]
+  chatChannelAccounts ChatChannelAccount[]
+  unifiedUsers   UnifiedUser[]
+  unifiedUserIdentities UnifiedUserIdentity[]
   lineEvents     LineEvent[]
   lineFollowers  LineFollower[]
   facebookSyncs  FacebookSync[]
@@ -605,6 +620,304 @@ model Csat {
   @@index([tenantId, project])
   @@index([tenantId, submittedAt])
   @@map("csat")
+}
+
+model LineContent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  type        String   @default("TEXT") // TEXT, FLEX, RICHMENU, etc.
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, ARCHIVED
+  content     Json     // LINE payload / template body
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chatAutoRules ChatAutoRule[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@map("line_contents")
+}
+
+model MessengerContent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  type        String   @default("MESSAGE") // MESSAGE, TEMPLATE, etc.
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, ARCHIVED
+  content     Json     // Messenger payload (array of message objects)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  chatAutoRules ChatAutoRule[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@map("messenger_contents")
+}
+
+model EmailContent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  type        String   @default("EMAIL") // EMAIL, TEMPLATE, etc.
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, ARCHIVED
+  content     Json     // { subject, preheader?, html?, text? }
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@map("email_contents")
+}
+
+model SmsContent {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  type        String   @default("SMS") // SMS, TEMPLATE, etc.
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, ARCHIVED
+  content     Json     // { text }
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@map("sms_contents")
+}
+
+model MessageBroadcast {
+  id               String   @id @default(uuid())
+  tenantId         String
+  immediateId      String?
+  channel          String   // LINE, MESSENGER, EMAIL, SMS
+  channelAccountId String?
+  templateKind     String?  // LINE_CONTENT, MESSENGER_CONTENT, EMAIL_CONTENT, SMS_CONTENT, RAW
+  templateId       String?
+  name             String?  // optional campaign/name for history
+  payload          Json
+  stats            Json?    // { total, queued, sent, failed }
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  immediate  MessageImmediate? @relation(fields: [immediateId], references: [id], onDelete: SetNull)
+  deliveries MessageDelivery[]
+
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, createdAt])
+  @@map("message_broadcasts")
+}
+
+model MessageImmediate {
+  id               String   @id @default(uuid())
+  tenantId         String
+  name             String
+  status           String   @default("DRAFT") // DRAFT, SENT, ARCHIVED
+  channel          String   // LINE, MESSENGER, EMAIL, SMS
+  channelAccountId String?
+  audience         Json     // { mode, ... }
+  templateKind     String   @default("RAW")
+  templateId       String?
+  payload          Json?    // when templateKind = RAW
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcasts MessageBroadcast[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, channel])
+  @@map("message_immediates")
+}
+
+model MessageDelivery {
+  id           String   @id @default(uuid())
+  tenantId     String
+  broadcastId  String
+  destination  String   // email/phone/lineUserId/psid/conversationId
+  status       String   @default("QUEUED") // QUEUED, SENT, FAILED
+  errorMessage String?
+  providerMeta Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcast MessageBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, broadcastId])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("message_deliveries")
+}
+
+model ChatAutoRule {
+  id                String   @id @default(uuid())
+  tenantId          String
+  channel           String   // LINE, MESSENGER, etc.
+  name              String
+  status            String   @default("ACTIVE") // ACTIVE, PAUSED
+  matchType         String   @default("CONTAINS") // CONTAINS, EQUALS
+  keywords          Json     // string[] (tag-like keywords)
+  responseKind      String   @default("LINE_CONTENT") // LINE_CONTENT, MESSENGER_CONTENT, RAW
+  lineContentId     String?
+  messengerContentId String?
+  responsePayload   Json?    // optional cached payload (array/object)
+  metadata          Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lineContent      LineContent?      @relation(fields: [lineContentId], references: [id], onDelete: SetNull)
+  messengerContent MessengerContent? @relation(fields: [messengerContentId], references: [id], onDelete: SetNull)
+  logs             ChatAutoLog[]
+  outbox           ChatAutoOutbox[]
+
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@unique([tenantId, channel, name])
+  @@map("chat_auto_rules")
+}
+
+model ChatAutoLog {
+  id           String   @id @default(uuid())
+  tenantId     String
+  channel      String
+  inboundText  String?
+  inboundMeta  Json?
+  matchedRuleId String?
+  matchedKeywords Json?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  matchedRule ChatAutoRule? @relation(fields: [matchedRuleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, createdAt])
+  @@map("chat_auto_logs")
+}
+
+model ChatAutoOutbox {
+  id          String   @id @default(uuid())
+  tenantId    String
+  channel     String
+  destination String? // lineUserId / psid / conversationId etc
+  payload     Json
+  status      String   @default("PENDING") // PENDING, SENT, FAILED
+  errorMessage String?
+  ruleId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rule   ChatAutoRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("chat_auto_outbox")
+}
+
+model ChatChannelAccount {
+  id        String   @id @default(uuid())
+  tenantId  String
+  channel   String   // LINE, MESSENGER, IG, FACEBOOK
+  name      String   // e.g., "LINE 1", "Facebook Page 2"
+  status    String   @default("ACTIVE") // ACTIVE, DISABLED
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  identities UnifiedUserIdentity[]
+
+  @@unique([tenantId, channel, name])
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, status])
+  @@map("chat_channel_accounts")
+}
+
+model UnifiedUser {
+  id          String   @id @default(uuid())
+  tenantId    String
+  displayName String?
+  profile     Json?    // e.g. { email, phone, ... }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  identities UnifiedUserIdentity[]
+
+  @@index([tenantId])
+  @@index([tenantId, displayName])
+  @@map("unified_users")
+}
+
+model UnifiedUserIdentity {
+  id               String   @id @default(uuid())
+  tenantId         String
+  unifiedUserId    String
+  channel          String   // LINE, MESSENGER, IG, FACEBOOK
+  channelAccountId String?
+  externalId       String   // line userId / psid / ig id / conversation id
+  externalProfile  Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unifiedUser    UnifiedUser         @relation(fields: [unifiedUserId], references: [id], onDelete: Cascade)
+  channelAccount ChatChannelAccount? @relation(fields: [channelAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, channel, externalId, channelAccountId])
+  @@index([tenantId])
+  @@index([tenantId, channel])
+  @@index([tenantId, unifiedUserId])
+  @@map("unified_user_identities")
 }
 
 model LineEvent {

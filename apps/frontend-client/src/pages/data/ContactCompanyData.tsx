@@ -5,7 +5,7 @@ import { useTenant } from '../../contexts/TenantContext';
 export function ContactCompanyData() {
   const queryClient = useQueryClient();
   const { activeTenant } = useTenant();
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [importFile, setImportFile] = useState<File | null>(null);
   const [syncConfig, setSyncConfig] = useState({
     apiUrl: '',
@@ -22,20 +22,20 @@ export function ContactCompanyData() {
   const tenantId = activeTenant?.id || '';
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  // Get accounts list (companies)
-  const { data: accountsResponse } = useQuery(
-    ['accounts', tenantId],
+  // Get company customers list
+  const { data: customersResponse } = useQuery(
+    ['company-customers', tenantId],
     async () => {
       if (!tenantId) return [];
 
-      const response = await fetch(`${apiUrl}/accounts`, {
+      const response = await fetch(`${apiUrl}/customers?type=COMPANY&limit=100`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'x-tenant-id': tenantId,
         },
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch accounts');
+        throw new Error('Failed to fetch customers');
       }
       return response.json();
     },
@@ -44,11 +44,14 @@ export function ContactCompanyData() {
     }
   );
 
-  const accounts = Array.isArray(accountsResponse) ? accountsResponse : [];
+  // Handle response: { data: [...] } or array
+  const customers = Array.isArray(customersResponse?.data)
+    ? customersResponse.data
+    : (Array.isArray(customersResponse) ? customersResponse : []);
 
-  // Get contacts list with pagination (filtered by accountId if selected)
+  // Get contacts list with pagination (filtered by customerId if selected)
   const { data: contactsResponse, isLoading, error: contactsError } = useQuery(
-    ['contacts-company', tenantId, selectedAccountId, currentPage, limit],
+    ['contacts-company', tenantId, selectedCustomerId, currentPage, limit],
     async () => {
       if (!tenantId) return { data: [], total: 0, page: 1, limit: 20, totalPages: 1 };
 
@@ -56,8 +59,8 @@ export function ContactCompanyData() {
         page: currentPage.toString(),
         limit: limit.toString(),
       });
-      if (selectedAccountId) {
-        params.append('accountId', selectedAccountId);
+      if (selectedCustomerId) {
+        params.append('customerId', selectedCustomerId);
       }
 
       const response = await fetch(`${apiUrl}/contacts?${params.toString()}`, {
@@ -87,13 +90,13 @@ export function ContactCompanyData() {
 
   // Import file mutation
   const importMutation = useMutation(
-    async ({ file, accountId }: { file: File; accountId: string }) => {
+    async ({ file, customerId }: { file: File; customerId: string }) => {
       if (!tenantId) throw new Error('No tenant selected');
-      if (!accountId) throw new Error('Please select a company first');
+      if (!customerId) throw new Error('Please select a company customer first');
 
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('accountId', accountId);
+      formData.append('customerId', customerId);
 
       const response = await fetch(`${apiUrl}/contacts/import`, {
         method: 'POST',
@@ -113,7 +116,7 @@ export function ContactCompanyData() {
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['contacts-company', tenantId, selectedAccountId]);
+        queryClient.invalidateQueries(['contacts-company', tenantId, selectedCustomerId]);
         setShowImportModal(false);
         setImportFile(null);
         setImportPreview([]);
@@ -123,9 +126,9 @@ export function ContactCompanyData() {
 
   // Sync API mutation
   const syncMutation = useMutation(
-    async ({ config, accountId }: { config: typeof syncConfig; accountId?: string }) => {
+    async ({ config, customerId }: { config: typeof syncConfig; customerId?: string }) => {
       if (!tenantId) throw new Error('No tenant selected');
-      if (!accountId) throw new Error('Please select a company to sync contacts to');
+      if (!customerId) throw new Error('Please select a company customer to sync contacts to');
 
       const response = await fetch(`${apiUrl}/contacts/sync`, {
         method: 'POST',
@@ -134,7 +137,7 @@ export function ContactCompanyData() {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           'x-tenant-id': tenantId,
         },
-        body: JSON.stringify({ ...config, accountId }),
+        body: JSON.stringify({ ...config, customerId }),
       });
 
       if (!response.ok) {
@@ -146,7 +149,7 @@ export function ContactCompanyData() {
     },
     {
       onSuccess: () => {
-        queryClient.invalidateQueries(['contacts-company', tenantId, selectedAccountId]);
+        queryClient.invalidateQueries(['contacts-company', tenantId, selectedCustomerId]);
         setShowSyncModal(false);
         setSyncConfig({ apiUrl: '', apiKey: '', syncFrequency: 'manual' });
       },
@@ -185,11 +188,11 @@ export function ContactCompanyData() {
 
   const handleImport = () => {
     if (!importFile) return;
-    if (!selectedAccountId) {
-      alert('Please select a company to import contacts to');
+    if (!selectedCustomerId) {
+      alert('Please select a company customer to import contacts to');
       return;
     }
-    importMutation.mutate({ file: importFile, accountId: selectedAccountId });
+    importMutation.mutate({ file: importFile, customerId: selectedCustomerId });
   };
 
   const downloadSampleFile = () => {
@@ -212,18 +215,18 @@ export function ContactCompanyData() {
   };
 
   const handleSync = () => {
-    if (!selectedAccountId) {
-      alert('Please select a company to sync contacts to');
+    if (!selectedCustomerId) {
+      alert('Please select a company customer to sync contacts to');
       return;
     }
     if (!syncConfig.apiUrl || !syncConfig.apiKey) {
       alert('Please provide API URL and API Key');
       return;
     }
-    syncMutation.mutate({ config: syncConfig, accountId: selectedAccountId });
+    syncMutation.mutate({ config: syncConfig, customerId: selectedCustomerId });
   };
 
-  const selectedAccount = accounts.find((acc: any) => acc.id === selectedAccountId);
+  const selectedCustomer = customers.find((c: any) => c.id === selectedCustomerId);
 
   if (isLoading) {
     return (
@@ -272,29 +275,39 @@ export function ContactCompanyData() {
       {/* Company Filter */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <label className="block text-sm font-medium mb-2">
-          Filter by Company (Optional)
+          Filter by Company Customer (Optional)
         </label>
         <select
           className="w-full px-3 py-2 border border-border rounded-md"
-          value={selectedAccountId}
+          value={selectedCustomerId}
           onChange={(e) => {
-            setSelectedAccountId(e.target.value);
+            setSelectedCustomerId(e.target.value);
             setCurrentPage(1);
           }}
         >
-          <option value="">-- All Companies --</option>
-          {accounts.map((account: any) => (
-            <option key={account.id} value={account.id}>
-              {account.name} {account.industry ? `(${account.industry})` : ''}
-            </option>
-          ))}
+          <option value="">-- All Company Customers --</option>
+          {customers.map((customer: any) => {
+            const identifiers = customer.identifiers || {};
+            const profile = customer.profile || {};
+            const companyName = profile.companyName || identifiers.company || profile.name || identifiers.name || '-';
+            const industry = profile.industry || identifiers.industry || '';
+            return (
+              <option key={customer.id} value={customer.id}>
+                {companyName} {industry ? `(${industry})` : ''}
+              </option>
+            );
+          })}
         </select>
-        {selectedAccount && (
+        {selectedCustomer && (
           <div className="mt-3 p-3 bg-background rounded-md">
             <div className="text-sm">
-              <div className="font-medium">Filtering by: {selectedAccount.name}</div>
-              {selectedAccount.industry && (
-                <div className="text-secondary-text">Industry: {selectedAccount.industry}</div>
+              <div className="font-medium">
+                Filtering by: {(selectedCustomer.profile?.companyName || selectedCustomer.identifiers?.company || selectedCustomer.profile?.name || selectedCustomer.identifiers?.name || selectedCustomer.id)}
+              </div>
+              {(selectedCustomer.profile?.industry || selectedCustomer.identifiers?.industry) && (
+                <div className="text-secondary-text">
+                  Industry: {selectedCustomer.profile?.industry || selectedCustomer.identifiers?.industry}
+                </div>
               )}
             </div>
           </div>
@@ -321,7 +334,9 @@ export function ContactCompanyData() {
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6 border-b border-border">
           <h2 className="text-lg font-semibold">
-            {selectedAccount ? `Contacts for ${selectedAccount.name}` : 'All Contacts'}
+            {selectedCustomer
+              ? `Contacts for ${(selectedCustomer.profile?.companyName || selectedCustomer.identifiers?.company || selectedCustomer.profile?.name || selectedCustomer.identifiers?.name || selectedCustomer.id)}`
+              : 'All Contacts'}
           </h2>
         </div>
         <div className="overflow-x-auto">
@@ -354,9 +369,11 @@ export function ContactCompanyData() {
             <tbody className="bg-white divide-y divide-border">
               {contacts && contacts.length > 0 ? (
                   contacts.map((contact: any) => {
-                    const accountContacts = contact.accountContacts || [];
-                    const companyName = accountContacts.length > 0 && accountContacts[0]?.account?.name 
-                      ? accountContacts[0].account.name 
+                    const customer = contact.customer || null;
+                    const customerProfile = customer?.profile || {};
+                    const customerIdentifiers = customer?.identifiers || {};
+                    const companyName = customer
+                      ? (customerProfile.companyName || customerIdentifiers.company || customerProfile.name || customerIdentifiers.name || '-')
                       : '-';
                     return (
                       <tr key={contact.id} className="hover:bg-background">
@@ -387,8 +404,8 @@ export function ContactCompanyData() {
               ) : (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-secondary-text">
-                    {selectedAccountId 
-                      ? 'No contacts found for this company. Import a file or sync from API to get started.'
+                    {selectedCustomerId
+                      ? 'No contacts found for this company customer. Import a file or sync from API to get started.'
                       : 'No contacts found. Import a file or sync from API to get started.'}
                   </td>
                 </tr>
@@ -555,7 +572,7 @@ export function ContactCompanyData() {
                 </button>
                 <button
                   onClick={handleImport}
-                  disabled={!importFile || !selectedAccountId || importMutation.isLoading}
+                  disabled={!importFile || !selectedCustomerId || importMutation.isLoading}
                   className="px-4 py-2 bg-primary text-base rounded-md font-medium hover:bg-yellow-400 disabled:opacity-50"
                 >
                   {importMutation.isLoading ? 'Importing...' : 'Import File'}
@@ -640,7 +657,7 @@ export function ContactCompanyData() {
                 </button>
                 <button
                   onClick={handleSync}
-                  disabled={!selectedAccountId || !syncConfig.apiUrl || !syncConfig.apiKey || syncMutation.isLoading}
+                  disabled={!selectedCustomerId || !syncConfig.apiUrl || !syncConfig.apiKey || syncMutation.isLoading}
                   className="px-4 py-2 bg-primary text-base rounded-md font-medium hover:bg-yellow-400 disabled:opacity-50"
                 >
                   {syncMutation.isLoading ? 'Syncing...' : 'Sync Now'}

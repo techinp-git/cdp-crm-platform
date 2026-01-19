@@ -24,7 +24,7 @@ export class ContactService {
 
   async findAll(
     tenantId: string,
-    filters?: { customerId?: string; accountId?: string; search?: string; page?: number; limit?: number }
+    filters?: { customerId?: string; search?: string; page?: number; limit?: number }
   ): Promise<{ data: any[]; total: number; page: number; limit: number; totalPages: number }> {
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
@@ -34,14 +34,6 @@ export class ContactService {
     
     if (filters?.customerId) {
       where.customerId = filters.customerId;
-    }
-    
-    if (filters?.accountId) {
-      where.accountContacts = {
-        some: {
-          accountId: filters.accountId,
-        },
-      };
     }
     
     if (filters?.search) {
@@ -57,11 +49,6 @@ export class ContactService {
         where,
         include: {
           customer: true,
-          accountContacts: {
-            include: {
-              account: true,
-            },
-          },
         },
         orderBy: { lastName: 'asc' },
         skip,
@@ -84,11 +71,6 @@ export class ContactService {
       where: { id, tenantId },
       include: {
         customer: true,
-        accountContacts: {
-          include: {
-            account: true,
-          },
-        },
       },
     });
     if (!contact) {
@@ -112,20 +94,24 @@ export class ContactService {
     });
   }
 
-  async importFromFile(tenantId: string, accountId: string, file: Express.Multer.File): Promise<{ success: number; failed: number; errors: string[] }> {
+  async importFromFile(
+    tenantId: string,
+    customerId: string,
+    file: Express.Multer.File
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
     if (!file) {
       throw new BadRequestException('No file provided');
     }
-    if (!accountId) {
-      throw new BadRequestException('Account ID is required');
+    if (!customerId) {
+      throw new BadRequestException('Customer ID is required');
     }
 
-    // Verify account exists
-    const account = await this.prisma.account.findFirst({
-      where: { id: accountId, tenantId },
+    // Verify customer exists (company customer)
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
     });
-    if (!account) {
-      throw new NotFoundException('Account not found');
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
     }
 
     let rows: any[] = [];
@@ -196,7 +182,7 @@ export class ContactService {
         }
 
         if (existing) {
-          // Update existing contact and link to account
+          // Update existing contact and link to customer
           await this.prisma.contact.update({
             where: { id: existing.id },
             data: {
@@ -206,33 +192,15 @@ export class ContactService {
               phone: phone || existing.phone,
               title: title || existing.title,
               department: department || existing.department,
+              customerId,
             },
           });
-
-          // Link to account if not already linked
-          const accountContact = await this.prisma.accountContact.findUnique({
-            where: {
-              accountId_contactId: {
-                accountId,
-                contactId: existing.id,
-              },
-            },
-          });
-
-          if (!accountContact) {
-            await this.prisma.accountContact.create({
-              data: {
-                accountId,
-                contactId: existing.id,
-                role: 'PRIMARY',
-              },
-            });
-          }
         } else {
           // Create new contact
           const contact = await this.prisma.contact.create({
             data: {
               tenantId,
+              customerId,
               firstName,
               lastName,
               email: email || null,
@@ -243,15 +211,6 @@ export class ContactService {
                 source: 'IMPORT_FILE',
                 importedAt: new Date().toISOString(),
               },
-            },
-          });
-
-          // Link to account
-          await this.prisma.accountContact.create({
-            data: {
-              accountId,
-              contactId: contact.id,
-              role: 'PRIMARY',
             },
           });
         }
@@ -265,20 +224,24 @@ export class ContactService {
     return { success, failed, errors: errors.slice(0, 10) };
   }
 
-  async syncFromApi(tenantId: string, accountId: string, config: { apiUrl: string; apiKey: string; syncFrequency?: string }): Promise<{ success: number; failed: number; errors: string[] }> {
+  async syncFromApi(
+    tenantId: string,
+    customerId: string,
+    config: { apiUrl: string; apiKey: string; syncFrequency?: string }
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
     if (!config.apiUrl || !config.apiKey) {
       throw new BadRequestException('API URL and API Key are required');
     }
-    if (!accountId) {
-      throw new BadRequestException('Account ID is required');
+    if (!customerId) {
+      throw new BadRequestException('Customer ID is required');
     }
 
-    // Verify account exists
-    const account = await this.prisma.account.findFirst({
-      where: { id: accountId, tenantId },
+    // Verify customer exists
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
     });
-    if (!account) {
-      throw new NotFoundException('Account not found');
+    if (!customer) {
+      throw new NotFoundException('Customer not found');
     }
 
     try {
@@ -357,33 +320,15 @@ export class ContactService {
                 phone: phone || existing.phone,
                 title: title || existing.title,
                 department: department || existing.department,
+                customerId,
               },
             });
-
-            // Link to account if not already linked
-            const accountContact = await this.prisma.accountContact.findUnique({
-              where: {
-                accountId_contactId: {
-                  accountId,
-                  contactId: existing.id,
-                },
-              },
-            });
-
-            if (!accountContact) {
-              await this.prisma.accountContact.create({
-                data: {
-                  accountId,
-                  contactId: existing.id,
-                  role: 'PRIMARY',
-                },
-              });
-            }
           } else {
             // Create new contact
-            const contact = await this.prisma.contact.create({
+            await this.prisma.contact.create({
               data: {
                 tenantId,
+                customerId,
                 firstName,
                 lastName,
                 email: email || null,
@@ -394,15 +339,6 @@ export class ContactService {
                   source: 'API_SYNC',
                   syncedAt: new Date().toISOString(),
                 },
-              },
-            });
-
-            // Link to account
-            await this.prisma.accountContact.create({
-              data: {
-                accountId,
-                contactId: contact.id,
-                role: 'PRIMARY',
               },
             });
           }

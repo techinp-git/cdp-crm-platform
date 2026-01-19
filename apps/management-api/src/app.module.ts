@@ -24,6 +24,13 @@ import { BillingModule } from './billing/billing.module';
 import { LineEventModule } from './line-event/line-event.module';
 import { LineFollowerModule } from './line-follower/line-follower.module';
 import { FacebookSyncModule } from './facebook-sync/facebook-sync.module';
+import { LineContentModule } from './line-content/line-content.module';
+import { MessengerContentModule } from './messenger-content/messenger-content.module';
+import { EmailContentModule } from './email-content/email-content.module';
+import { SmsContentModule } from './sms-content/sms-content.module';
+import { MessageCenterModule } from './message-center/message-center.module';
+import { ChatAutoMessagerModule } from './chat-auto-messager/chat-auto-messager.module';
+import { ChatCenterModule } from './chat-center/chat-center.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 
@@ -55,6 +62,13 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
     LineEventModule,
     LineFollowerModule,
     FacebookSyncModule,
+    LineContentModule,
+    MessengerContentModule,
+    EmailContentModule,
+    SmsContentModule,
+    MessageCenterModule,
+    ChatAutoMessagerModule,
+    ChatCenterModule,
   ],
   providers: [
     {

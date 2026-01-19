@@ -27,6 +27,12 @@ export class RbacGuard implements CanActivate {
       return true;
     }
 
+    // Tenant admin role bypasses permission checks
+    // (Admin role is intended to have full access across the tenant.)
+    if (Array.isArray(user.roles) && user.roles.includes('admin')) {
+      return true;
+    }
+
     const userPermissions = user.permissions || [];
 
     // Check if user has at least one of the required permissions

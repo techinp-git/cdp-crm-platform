@@ -52,7 +52,7 @@ export const menuConfig: MenuConfig = {
         {
           id: 'preset-audience',
           label: 'Preset Audience',
-          path: '/audience/preset',
+          path: '/audience/preset-audience',
         },
         {
           id: 'audience-builder',
@@ -168,16 +168,33 @@ export const menuConfig: MenuConfig = {
           label: 'LINE OA Bot/Group Bot',
           path: '/data/sources/line-bot',
         },
-              {
-                id: 'line-event',
-                label: 'LINE OA Event',
-                path: '/data/sources/line-event',
-              },
-              {
-                id: 'facebook-sync',
-                label: 'Facebook Sync',
-                path: '/data/sources/facebook-sync',
-              },
+        {
+          id: 'line-event',
+          label: 'LINE OA Event',
+          path: '/data/sources/line-event',
+        },
+        {
+          id: 'facebook-sync',
+          label: 'Facebook Sync',
+          path: '/data/sources/facebook-sync',
+        },
+      ],
+    },
+    {
+      id: 'application',
+      label: 'Application',
+      icon: 'plug',
+      children: [
+        {
+          id: 'chat-center',
+          label: 'Chat Center',
+          path: '/applications/chat-center',
+        },
+        {
+          id: 'chat-auto-messager',
+          label: 'Chat Auto Messager',
+          path: '/applications/chat-auto-messager',
+        },
       ],
     },
     {

@@ -45,14 +45,13 @@ export class ContactController {
   findAll(
     @TenantId() tenantId: string,
     @Query('customerId') customerId?: string,
-    @Query('accountId') accountId?: string,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.contactService.findAll(tenantId, { customerId, accountId, search, page: pageNum, limit: limitNum });
+    return this.contactService.findAll(tenantId, { customerId, search, page: pageNum, limit: limitNum });
   }
 
   @Get(':id')
@@ -83,25 +82,25 @@ export class ContactController {
   @ApiOperation({ summary: 'Import contacts from CSV file' })
   async importFromFile(
     @UploadedFile() file: Express.Multer.File,
-    @Body('accountId') accountId: string,
+    @Body('customerId') customerId: string,
     @TenantId() tenantId: string,
   ) {
-    if (!accountId) {
-      throw new BadRequestException('Account ID is required');
+    if (!customerId) {
+      throw new BadRequestException('Customer ID is required');
     }
-    return this.contactService.importFromFile(tenantId, accountId, file);
+    return this.contactService.importFromFile(tenantId, customerId, file);
   }
 
   @Post('sync')
   @RequirePermissions('contact:write')
   @ApiOperation({ summary: 'Sync contacts from external API' })
   async syncFromApi(
-    @Body() syncConfig: { apiUrl: string; apiKey: string; accountId: string; syncFrequency?: string },
+    @Body() syncConfig: { apiUrl: string; apiKey: string; customerId: string; syncFrequency?: string },
     @TenantId() tenantId: string,
   ) {
-    if (!syncConfig.accountId) {
-      throw new BadRequestException('Account ID is required');
+    if (!syncConfig.customerId) {
+      throw new BadRequestException('Customer ID is required');
     }
-    return this.contactService.syncFromApi(tenantId, syncConfig.accountId, syncConfig);
+    return this.contactService.syncFromApi(tenantId, syncConfig.customerId, syncConfig);
   }
 }

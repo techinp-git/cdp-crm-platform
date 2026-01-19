@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChatAutoMessagerService } from '../chat-auto-messager/chat-auto-messager.service';
 
 interface CreateLineEventDto {
   eventType: string;
@@ -24,7 +25,10 @@ interface CreateLineEventDto {
 
 @Injectable()
 export class LineEventService {
-  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private prisma: PrismaService,
+    @Inject(ChatAutoMessagerService) private chatAuto: ChatAutoMessagerService,
+  ) {}
 
   async create(tenantId: string, createLineEventDto: CreateLineEventDto) {
     // Convert timestamp from milliseconds to Date if needed
@@ -222,6 +226,16 @@ export class LineEventService {
         }
 
         await this.create(tenantId, eventData);
+        // Auto-matching for LINE text messages (creates log + outbox)
+        if (eventData.messageType === 'text' && eventData.messageText) {
+          await this.chatAuto.handleInbound(
+            tenantId,
+            'LINE',
+            eventData.messageText,
+            eventData.userId,
+            { sourceType: eventData.sourceType, messageId: eventData.messageId },
+          );
+        }
         processed++;
       } catch (error) {
         errors.push(`Event ${event.type || 'unknown'}: ${error instanceof Error ? error.message : 'Unknown error'}`);

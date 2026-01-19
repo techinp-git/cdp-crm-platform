@@ -1,4 +1,5 @@
-import { PrismaClient, TenantType, TenantStatus, UserStatus, DealStatus } from '@prisma/client';
+// Use the workspace-generated Prisma Client (see schema.prisma `output`)
+import { PrismaClient, TenantType, TenantStatus, UserStatus, DealStatus } from '../node_modules/.prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -465,6 +466,18 @@ async function main() {
     { resource: 'csat', action: 'read' },
     { resource: 'csat', action: 'write' },
     { resource: 'csat', action: 'delete' },
+    { resource: 'line-content', action: 'read' },
+    { resource: 'line-content', action: 'write' },
+    { resource: 'line-content', action: 'delete' },
+    { resource: 'messenger-content', action: 'read' },
+    { resource: 'messenger-content', action: 'write' },
+    { resource: 'messenger-content', action: 'delete' },
+    { resource: 'chat-auto-messager', action: 'read' },
+    { resource: 'chat-auto-messager', action: 'write' },
+    { resource: 'chat-auto-messager', action: 'delete' },
+    { resource: 'chat-center', action: 'read' },
+    { resource: 'chat-center', action: 'write' },
+    { resource: 'chat-center', action: 'delete' },
     { resource: 'line-event', action: 'read' },
     { resource: 'line-event', action: 'write' },
     { resource: 'line-event', action: 'delete' },
@@ -553,19 +566,27 @@ async function main() {
   // Create Sample Customers
   const customers = [];
   for (let i = 1; i <= 10; i++) {
+    const isCompany = i % 3 === 0;
+    const companyName = isCompany ? `Company ${i}` : null;
+    const firstName = `Customer${i}`;
+    const lastName = `Last${i}`;
+    const name = isCompany ? companyName : `${firstName} ${lastName}`.trim();
+
     const customer = await prisma.customer.create({
       data: {
         tenantId: tenant.id,
-        type: i % 3 === 0 ? 'COMPANY' : 'INDIVIDUAL',
+        type: isCompany ? 'COMPANY' : 'INDIVIDUAL',
         identifiers: {
           email: `customer${i}@example.com`,
           phone: `+1-555-000-${String(i).padStart(4, '0')}`,
           externalId: `EXT-${i}`,
+          company: companyName,
         },
         profile: {
-          firstName: `Customer${i}`,
-          lastName: `Last${i}`,
-          company: i % 3 === 0 ? `Company ${i}` : undefined,
+          firstName,
+          lastName,
+          companyName,
+          name,
         },
       },
     });

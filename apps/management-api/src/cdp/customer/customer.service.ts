@@ -191,6 +191,14 @@ export class CustomerService {
         const firstName = row.firstName || row.first_name || row['First Name'] || row['First Name'] || '';
         const lastName = row.lastName || row.last_name || row['Last Name'] || row['Last Name'] || '';
         const phone = row.phone || row.Phone || row.PHONE || row['Phone Number'] || '';
+        const company = row.company || row.Company || row.companyName || row['Company Name'] || '';
+        const companyTaxId = row.companyTaxId || row.company_tax_id || row.taxId || row.TaxId || '';
+        const industry = row.industry || row.Industry || '';
+        const companySize = row.companySize || row.company_size || row.size || '';
+        const address = row.address || row.Address || '';
+        const city = row.city || row.City || '';
+        const country = row.country || row.Country || '';
+        const postalCode = row.postalCode || row.postal_code || row.zip || row.Zip || '';
 
         if (!email) {
           errors.push(`Row ${i + 2}: Missing email`);
@@ -210,19 +218,44 @@ export class CustomerService {
         });
 
         if (existing) {
+          const existingIdentifiers = (existing.identifiers as any) || {};
+          const existingProfile = (existing.profile as any) || {};
+          const isCompany =
+            existing.type === 'COMPANY' || !!company || !!existingProfile.companyName || !!existingIdentifiers.company;
+          const contactPerson = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : null;
+          const derivedName = isCompany
+            ? (company || existingProfile.companyName || existingIdentifiers.company || existingProfile.name || existingIdentifiers.name || email)
+            : (`${firstName} ${lastName}`.trim() || existingProfile.name || existingIdentifiers.name || email);
+
           // Update existing customer
           await this.prisma.customer.update({
             where: { id: existing.id },
             data: {
               identifiers: {
-                ...(existing.identifiers as any),
+                ...existingIdentifiers,
                 email,
                 phone: phone || (existing.identifiers as any).phone,
+                company: company || existingIdentifiers.company || null,
+                companyTaxId: companyTaxId || existingIdentifiers.companyTaxId || null,
               },
               profile: {
-                ...(existing.profile as any),
-                firstName: firstName || (existing.profile as any).firstName,
-                lastName: lastName || (existing.profile as any).lastName,
+                ...existingProfile,
+                ...(isCompany
+                  ? {
+                      companyName: company || existingProfile.companyName || existingIdentifiers.company || null,
+                      industry: industry || existingProfile.industry || null,
+                      companySize: companySize || existingProfile.companySize || null,
+                      address: address || existingProfile.address || null,
+                      city: city || existingProfile.city || null,
+                      country: country || existingProfile.country || null,
+                      postalCode: postalCode || existingProfile.postalCode || null,
+                      contactPerson: contactPerson || existingProfile.contactPerson || null,
+                    }
+                  : {
+                      firstName: firstName || existingProfile.firstName || null,
+                      lastName: lastName || existingProfile.lastName || null,
+                    }),
+                name: existingProfile.name || derivedName || null,
               },
               metadata: {
                 ...(existing.metadata as any),
@@ -234,6 +267,11 @@ export class CustomerService {
         } else {
           // Determine type: COMPANY if company name exists, otherwise INDIVIDUAL
           const customerType = company ? 'COMPANY' : 'INDIVIDUAL';
+          const contactPerson = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : null;
+          const name =
+            customerType === 'COMPANY'
+              ? (company || email)
+              : (`${firstName} ${lastName}`.trim() || email);
           
           // Create new customer
           await this.prisma.customer.create({
@@ -254,10 +292,12 @@ export class CustomerService {
                 city: city || null,
                 country: country || null,
                 postalCode: postalCode || null,
-                contactPerson: firstName && lastName ? `${firstName} ${lastName}` : null,
+                contactPerson,
+                name,
               } : {
                 firstName: firstName || null,
                 lastName: lastName || null,
+                name,
               },
               metadata: {
                 source: 'ERP_IMPORT',
@@ -322,6 +362,14 @@ export class CustomerService {
           const firstName = customerData.firstName || customerData.first_name || customerData['First Name'] || '';
           const lastName = customerData.lastName || customerData.last_name || customerData['Last Name'] || '';
           const phone = customerData.phone || customerData.Phone || customerData.phoneNumber || '';
+          const company = customerData.company || customerData.Company || customerData.companyName || customerData['Company Name'] || '';
+          const companyTaxId = customerData.companyTaxId || customerData.company_tax_id || customerData.taxId || customerData.TaxId || '';
+          const industry = customerData.industry || customerData.Industry || '';
+          const companySize = customerData.companySize || customerData.company_size || customerData.size || '';
+          const address = customerData.address || customerData.Address || '';
+          const city = customerData.city || customerData.City || '';
+          const country = customerData.country || customerData.Country || '';
+          const postalCode = customerData.postalCode || customerData.postal_code || customerData.zip || customerData.Zip || '';
 
           if (!email) {
             errors.push(`Customer ${i + 1}: Missing email`);
@@ -341,19 +389,44 @@ export class CustomerService {
           });
 
           if (existing) {
+            const existingIdentifiers = (existing.identifiers as any) || {};
+            const existingProfile = (existing.profile as any) || {};
+            const isCompany =
+              existing.type === 'COMPANY' || !!company || !!existingProfile.companyName || !!existingIdentifiers.company;
+            const contactPerson = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : null;
+            const derivedName = isCompany
+              ? (company || existingProfile.companyName || existingIdentifiers.company || existingProfile.name || existingIdentifiers.name || email)
+              : (`${firstName} ${lastName}`.trim() || existingProfile.name || existingIdentifiers.name || email);
+
             // Update existing customer
             await this.prisma.customer.update({
               where: { id: existing.id },
               data: {
                 identifiers: {
-                  ...(existing.identifiers as any),
+                  ...existingIdentifiers,
                   email,
                   phone: phone || (existing.identifiers as any).phone,
+                  company: company || existingIdentifiers.company || null,
+                  companyTaxId: companyTaxId || existingIdentifiers.companyTaxId || null,
                 },
                 profile: {
-                  ...(existing.profile as any),
-                  firstName: firstName || (existing.profile as any).firstName,
-                  lastName: lastName || (existing.profile as any).lastName,
+                  ...existingProfile,
+                  ...(isCompany
+                    ? {
+                        companyName: company || existingProfile.companyName || existingIdentifiers.company || null,
+                        industry: industry || existingProfile.industry || null,
+                        companySize: companySize || existingProfile.companySize || null,
+                        address: address || existingProfile.address || null,
+                        city: city || existingProfile.city || null,
+                        country: country || existingProfile.country || null,
+                        postalCode: postalCode || existingProfile.postalCode || null,
+                        contactPerson: contactPerson || existingProfile.contactPerson || null,
+                      }
+                    : {
+                        firstName: firstName || existingProfile.firstName || null,
+                        lastName: lastName || existingProfile.lastName || null,
+                      }),
+                  name: existingProfile.name || derivedName || null,
                 },
                 metadata: {
                   ...(existing.metadata as any),
@@ -363,43 +436,50 @@ export class CustomerService {
                 },
               },
             });
-                 } else {
-                   // Determine type: COMPANY if company name exists, otherwise INDIVIDUAL
-                   const customerType = company ? 'COMPANY' : 'INDIVIDUAL';
-                   
-                   // Create new customer
-                   await this.prisma.customer.create({
-                     data: {
-                       tenantId,
-                       type: customerType,
-                       identifiers: {
-                         email: email || null,
-                         phone: phone || null,
-                         company: company || null,
-                         companyTaxId: companyTaxId || null,
-                       },
-                       profile: customerType === 'COMPANY' ? {
-                         companyName: company,
-                         industry: industry || null,
-                         companySize: companySize || null,
-                         address: address || null,
-                         city: city || null,
-                         country: country || null,
-                         postalCode: postalCode || null,
-                         contactPerson: firstName && lastName ? `${firstName} ${lastName}` : null,
-                       } : {
-                         firstName: firstName || null,
-                         lastName: lastName || null,
-                       },
-                       metadata: {
-                         source: 'ERP_API_SYNC',
-                         syncedAt: new Date().toISOString(),
-                         syncFrequency: config.syncFrequency || 'manual',
-                         importType: 'B2B_COMPANY',
-                       },
-                     },
-                   });
-                 }
+          } else {
+            // Determine type: COMPANY if company name exists, otherwise INDIVIDUAL
+            const customerType = company ? 'COMPANY' : 'INDIVIDUAL';
+            const contactPerson = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : null;
+            const name =
+              customerType === 'COMPANY'
+                ? (company || email)
+                : (`${firstName} ${lastName}`.trim() || email);
+            
+            // Create new customer
+            await this.prisma.customer.create({
+              data: {
+                tenantId,
+                type: customerType,
+                identifiers: {
+                  email: email || null,
+                  phone: phone || null,
+                  company: company || null,
+                  companyTaxId: companyTaxId || null,
+                },
+                profile: customerType === 'COMPANY' ? {
+                  companyName: company,
+                  industry: industry || null,
+                  companySize: companySize || null,
+                  address: address || null,
+                  city: city || null,
+                  country: country || null,
+                  postalCode: postalCode || null,
+                  contactPerson,
+                  name,
+                } : {
+                  firstName: firstName || null,
+                  lastName: lastName || null,
+                  name,
+                },
+                metadata: {
+                  source: 'ERP_API_SYNC',
+                  syncedAt: new Date().toISOString(),
+                  syncFrequency: config.syncFrequency || 'manual',
+                  importType: 'B2B_COMPANY',
+                },
+              },
+            });
+          }
           success++;
         } catch (error) {
           errors.push(`Customer ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
