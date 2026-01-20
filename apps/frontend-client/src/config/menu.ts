@@ -135,7 +135,7 @@ export const menuConfig: MenuConfig = {
       children: [
         {
           id: 'erp',
-          label: 'Customer (Company)',
+          label: 'Customer',
           path: '/data/sources/customer',
         },
         {
@@ -451,4 +451,3 @@ export const menuConfig: MenuConfig = {
     // Note: Marketing & Engagement uses Core modules (Message Center, Content Management)
   ],
 };
-

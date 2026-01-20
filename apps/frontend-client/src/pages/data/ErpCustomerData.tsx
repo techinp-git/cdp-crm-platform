@@ -51,7 +51,7 @@ export function ErpCustomerData() {
     async (file: File) => {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/customers/erp/import`, {
         method: 'POST',
         headers: {
@@ -184,7 +184,7 @@ charlie.wilson@example.com,Charlie,Wilson,+66456789012,Enterprise Ltd,654 Corpor
     <div>
       <div className="flex justify-between items-center mb-6">
               <div>
-                <h1 className="text-2xl font-bold text-base">Customer (Company)</h1>
+                <h1 className="text-2xl font-bold text-base">Customer</h1>
                 <p className="text-sm text-secondary-text mt-1">
                   Manage B2B company customers - Import from files or sync from external ERP system
                 </p>
@@ -259,16 +259,16 @@ charlie.wilson@example.com,Charlie,Wilson,+66456789012,Enterprise Ltd,654 Corpor
                          const identifiers = customer.identifiers || {};
                          const profile = customer.profile || {};
                          const isCompany = customer.type === 'COMPANY';
-                         
+
                          return (
                            <tr key={customer.id} className="hover:bg-background">
                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base">
-                               {isCompany 
+                               {isCompany
                                  ? (profile.companyName || identifiers.company || '-')
                                  : ((profile.firstName || '') + ' ' + (profile.lastName || '')).trim() || '-'}
                              </td>
                              <td className="px-6 py-4 whitespace-nowrap text-sm">
-                               {isCompany 
+                               {isCompany
                                  ? (profile.contactPerson || '-')
                                  : '-'}
                              </td>
@@ -283,8 +283,8 @@ charlie.wilson@example.com,Charlie,Wilson,+66456789012,Enterprise Ltd,654 Corpor
                              </td>
                              <td className="px-6 py-4 whitespace-nowrap text-sm">
                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                 customer.type === 'COMPANY' 
-                                   ? 'bg-primary/20 text-primary' 
+                                 customer.type === 'COMPANY'
+                                   ? 'bg-primary/20 text-primary'
                                    : 'bg-info/20 text-info'
                                }`}>
                                  {customer.type || 'INDIVIDUAL'}
