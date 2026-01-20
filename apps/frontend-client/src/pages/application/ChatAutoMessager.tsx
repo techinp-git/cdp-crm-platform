@@ -14,6 +14,7 @@ type Rule = {
   status: RuleStatus;
   matchType: MatchType;
   keywords: string[];
+  tagIds?: string[] | null;
   responseKind: ResponseKind;
   lineContentId?: string | null;
   messengerContentId?: string | null;
@@ -22,6 +23,18 @@ type Rule = {
 };
 
 type ContentItem = { id: string; name: string; type: string; status: string; updatedAt: string };
+type TagItem = { id: string; name: string; color?: string | null };
+
+type OutboxItem = {
+  id: string;
+  channel: string;
+  destination?: string | null;
+  status: string;
+  errorMessage?: string | null;
+  createdAt: string;
+  payload?: any;
+  ruleId?: string | null;
+};
 
 function splitTags(input: string): string[] {
   return input
@@ -40,12 +53,14 @@ export function ChatAutoMessager() {
   const [q, setQ] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
+  const [historyRule, setHistoryRule] = useState<Rule | null>(null);
 
   const [form, setForm] = useState({
     name: '',
     status: 'ACTIVE' as RuleStatus,
     matchType: 'CONTAINS' as MatchType,
     keywordsInput: '',
+    tagIds: [] as string[],
     responseKind: 'LINE_CONTENT' as ResponseKind,
     lineContentId: '',
     messengerContentId: '',
@@ -112,6 +127,19 @@ export function ChatAutoMessager() {
     { enabled: !!tenantId },
   );
 
+  const tagsQuery = useQuery(
+    ['tags-lite', tenantId],
+    async () => {
+      const res = await fetch(`${apiUrl}/tags`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}`, 'x-tenant-id': tenantId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'Failed to load tags');
+      return (Array.isArray(data) ? data : []) as TagItem[];
+    },
+    { enabled: !!tenantId },
+  );
+
   const createOrUpdateMutation = useMutation(
     async () => {
       const keywords = splitTags(form.keywordsInput);
@@ -125,6 +153,7 @@ export function ChatAutoMessager() {
         matchType: form.matchType,
         keywords,
         responseKind: form.responseKind,
+        tagIds: form.tagIds,
       };
 
       if (form.responseKind === 'LINE_CONTENT') payload.lineContentId = form.lineContentId || null;
@@ -193,6 +222,7 @@ export function ChatAutoMessager() {
       status: 'ACTIVE',
       matchType: 'CONTAINS',
       keywordsInput: '',
+      tagIds: [],
       responseKind: activeChannel === 'LINE' ? 'LINE_CONTENT' : 'MESSENGER_CONTENT',
       lineContentId: '',
       messengerContentId: '',
@@ -208,6 +238,7 @@ export function ChatAutoMessager() {
       status: (r.status as RuleStatus) || 'ACTIVE',
       matchType: (r.matchType as MatchType) || 'CONTAINS',
       keywordsInput: Array.isArray(r.keywords) ? r.keywords.join(', ') : '',
+      tagIds: Array.isArray(r.tagIds) ? (r.tagIds as any) : [],
       responseKind: (r.responseKind as ResponseKind) || 'RAW',
       lineContentId: r.lineContentId || '',
       messengerContentId: r.messengerContentId || '',
@@ -215,6 +246,30 @@ export function ChatAutoMessager() {
     });
     setShowModal(true);
   };
+
+  const historyQueryKey = useMemo(
+    () => ['chat-auto-history', tenantId, historyRule?.id, historyRule?.channel],
+    [tenantId, historyRule?.id, historyRule?.channel],
+  );
+
+  const historyQuery = useQuery(
+    historyQueryKey,
+    async () => {
+      if (!historyRule) return [];
+      const params = new URLSearchParams({
+        channel: String(historyRule.channel),
+        ruleId: historyRule.id,
+        limit: '200',
+      });
+      const res = await fetch(`${apiUrl}/chat-auto-messager/outbox?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}`, 'x-tenant-id': tenantId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'Failed to load history');
+      return (Array.isArray(data) ? data : []) as OutboxItem[];
+    },
+    { enabled: !!tenantId && !!historyRule },
+  );
 
   if (!tenantId) {
     return (
@@ -228,6 +283,8 @@ export function ChatAutoMessager() {
   const rules: Rule[] = rulesQuery.data || [];
   const lineContents = lineContentsQuery.data || [];
   const messengerContents = messengerContentsQuery.data || [];
+  const tags: TagItem[] = tagsQuery.data || [];
+  const outboxHistory: OutboxItem[] = historyQuery.data || [];
 
   return (
     <div>
@@ -324,9 +381,18 @@ export function ChatAutoMessager() {
                       }`}>
                         {r.status}
                       </span>
+                      {Array.isArray(r.tagIds) && r.tagIds.length > 0 ? (
+                        <div className="mt-2 text-xs text-secondary-text">Tags: {r.tagIds.length}</div>
+                      ) : null}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
+                        <button
+                          className="px-3 py-2 text-sm bg-background rounded hover:bg-gray-100"
+                          onClick={() => setHistoryRule(r)}
+                        >
+                          History
+                        </button>
                         <button className="px-3 py-2 text-sm bg-background rounded hover:bg-gray-100" onClick={() => openEdit(r)}>
                           Edit
                         </button>
@@ -401,6 +467,87 @@ export function ChatAutoMessager() {
         )}
       </div>
 
+      {/* History modal */}
+      {historyRule && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl m-4">
+            <div className="p-6 border-b border-border flex justify-between items-center">
+              <div>
+                <div className="text-xl font-bold">Rule History</div>
+                <div className="text-sm text-secondary-text mt-1">
+                  {historyRule.name} • {String(historyRule.channel).toUpperCase()}
+                </div>
+              </div>
+              <button onClick={() => setHistoryRule(null)} className="text-secondary-text hover:text-base text-2xl">
+                ×
+              </button>
+            </div>
+
+            <div className="p-6">
+              {historyQuery.isError && (
+                <div className="mb-4 p-3 bg-error/10 text-error rounded-md text-sm">
+                  {(historyQuery.error as any)?.message || 'Failed to load history'}
+                </div>
+              )}
+
+              <div className="text-sm text-secondary-text mb-3">
+                แสดงรายการที่ระบบ auto-reply ส่งออก (จาก outbox) ว่าส่งหาใครบ้าง
+              </div>
+
+              <div className="border border-border rounded-md overflow-hidden">
+                <table className="min-w-full divide-y divide-border">
+                  <thead className="bg-background">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Sent At</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Destination</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Message</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-border">
+                    {historyQuery.isLoading ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-secondary-text">
+                          Loading...
+                        </td>
+                      </tr>
+                    ) : outboxHistory.length ? (
+                      outboxHistory.map((o) => (
+                        <tr key={o.id} className="hover:bg-background">
+                          <td className="px-4 py-2 text-sm text-secondary-text">
+                            {o.createdAt ? new Date(o.createdAt).toLocaleString('th-TH') : '-'}
+                          </td>
+                          <td className="px-4 py-2 text-sm font-mono">{o.destination || '-'}</td>
+                          <td className="px-4 py-2 text-sm">
+                            <span className="px-2 py-1 rounded bg-background border border-border">{o.status}</span>
+                            {o.errorMessage ? <div className="text-xs text-error mt-1">{o.errorMessage}</div> : null}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {typeof o.payload?.text === 'string' ? o.payload.text : JSON.stringify(o.payload || {})}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-8 text-center text-secondary-text">
+                          No history yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end mt-4">
+                <button onClick={() => setHistoryRule(null)} className="px-4 py-2 border border-border rounded-md hover:bg-background">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -469,6 +616,44 @@ export function ChatAutoMessager() {
                 />
                 <div className="text-xs text-secondary-text mt-1">
                   ระบบจะ match แบบ tag: ใส่ได้หลายคำ, ไม่สนตัวพิมพ์เล็ก/ใหญ่
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Assign Tags when matched (optional)</label>
+                <div className="border border-border rounded-md p-3 max-h-40 overflow-y-auto bg-background">
+                  {tagsQuery.isLoading ? (
+                    <div className="text-sm text-secondary-text">Loading tags...</div>
+                  ) : tags.length ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {tags.map((t) => {
+                        const checked = form.tagIds.includes(t.id);
+                        return (
+                          <label key={t.id} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? Array.from(new Set([...form.tagIds, t.id]))
+                                  : form.tagIds.filter((x) => x !== t.id);
+                                setForm({ ...form, tagIds: next });
+                              }}
+                            />
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-3 h-3 rounded" style={{ backgroundColor: t.color || '#9CA3AF' }} />
+                              <span>{t.name}</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-secondary-text">No tags yet. Create tags in CDP first.</div>
+                  )}
+                </div>
+                <div className="text-xs text-secondary-text mt-2">
+                  เมื่อ rule match แล้วระบบจะพยายามหา customer จาก identifier (LINE: lineUserId, Messenger: psid) แล้วติด tag ให้
                 </div>
               </div>
 

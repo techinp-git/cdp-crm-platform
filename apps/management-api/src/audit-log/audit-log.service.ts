@@ -20,7 +20,10 @@ export class AuditLogService {
     });
   }
 
-  async findAll(tenantId?: string, filters?: { entity?: string; action?: string; actorUserId?: string }) {
+  async findAll(
+    tenantId?: string,
+    filters?: { entity?: string; action?: string; actorUserId?: string; q?: string; page?: number; limit?: number },
+  ) {
     const where: any = {};
     if (tenantId) {
       where.tenantId = tenantId;
@@ -34,29 +37,55 @@ export class AuditLogService {
     if (filters?.actorUserId) {
       where.actorUserId = filters.actorUserId;
     }
+    if (filters?.q) {
+      const q = String(filters.q).trim();
+      if (q) {
+        where.OR = [
+          { entityId: { contains: q, mode: 'insensitive' } },
+          { action: { contains: q, mode: 'insensitive' } },
+          { entity: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+    }
 
-    return this.prisma.auditLog.findMany({
-      where,
-      include: {
-        actor: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
+    const page = Math.max(filters?.page || 1, 1);
+    const limit = Math.min(Math.max(filters?.limit || 50, 1), 200);
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        include: {
+          actor: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
           },
         },
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: string) {

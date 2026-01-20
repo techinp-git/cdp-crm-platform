@@ -104,18 +104,48 @@ interface MenuItemProps {
   location: any;
 }
 
+function normalizePath(p: string) {
+  const s = String(p || '').trim();
+  if (!s) return '/';
+  if (s === '/') return '/';
+  return s.replace(/\/+$/, '');
+}
+
+function isActivePath(itemPath: string, currentPath: string, opts?: { exact?: boolean }) {
+  const item = normalizePath(itemPath);
+  const cur = normalizePath(currentPath);
+
+  if (opts?.exact) return cur === item;
+
+  // Default: consider active when exact match OR child route under the same path segment
+  // Example: /cdp/customers active for /cdp/customers/123
+  if (cur === item) return true;
+  return cur.startsWith(item + '/');
+}
+
 function MenuItem({ item, location }: MenuItemProps) {
-  const isActive = item.path && location.pathname.startsWith(item.path);
+  // Avoid double-highlight for dashboard menu:
+  // - "/dashboard" should be active only when exactly on "/dashboard"
+  const isActive =
+    item.path &&
+    isActivePath(item.path, location.pathname, {
+      exact: normalizePath(item.path) === '/dashboard',
+    });
   const hasChildren = item.children && item.children.length > 0;
 
   // Check if any child is active
   const hasActiveChild = hasChildren && item.children.some((child: any) => {
     if (child.path) {
-      return location.pathname.startsWith(child.path);
+      return isActivePath(child.path, location.pathname, {
+        exact: normalizePath(child.path) === '/dashboard',
+      });
     }
     if (child.children) {
       return child.children.some((grandChild: any) => 
-        grandChild.path && location.pathname.startsWith(grandChild.path)
+        grandChild.path &&
+        isActivePath(grandChild.path, location.pathname, {
+          exact: normalizePath(grandChild.path) === '/dashboard',
+        })
       );
     }
     return false;

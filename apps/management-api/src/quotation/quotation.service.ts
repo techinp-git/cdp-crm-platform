@@ -21,6 +21,68 @@ interface UpdateQuotationDto extends Partial<CreateQuotationDto> {}
 export class QuotationService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
+  async insights(tenantId: string) {
+    const lines = await this.prisma.quotationLine.findMany({
+      where: { tenantId },
+      take: 20000,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        quantity: true,
+        lineAmount: true,
+        currency: true,
+        productSku: true,
+        productName: true,
+        product: { select: { sku: true, name: true, category: true } },
+      },
+    });
+
+    const byCategory = new Map<string, { category: string; amount: number; qty: number; lines: number }>();
+    const byProduct = new Map<
+      string,
+      { key: string; sku: string; name: string; category: string; amount: number; qty: number; lines: number }
+    >();
+
+    for (const l of lines as any[]) {
+      const qty = Number(l.quantity) || 0;
+      const amount = Number(l.lineAmount) || 0;
+      const sku = String(l.product?.sku || l.productSku || '').trim();
+      const name = String(l.product?.name || l.productName || sku || '').trim();
+      const category = String(l.product?.category || 'Uncategorized').trim() || 'Uncategorized';
+      const productKey = sku || name || `${category}::unknown`;
+
+      const c = byCategory.get(category) || { category, amount: 0, qty: 0, lines: 0 };
+      c.amount += amount;
+      c.qty += qty;
+      c.lines += 1;
+      byCategory.set(category, c);
+
+      const p = byProduct.get(productKey) || { key: productKey, sku, name, category, amount: 0, qty: 0, lines: 0 };
+      p.amount += amount;
+      p.qty += qty;
+      p.lines += 1;
+      byProduct.set(productKey, p);
+    }
+
+    const categories = Array.from(byCategory.values()).sort((a, b) => b.amount - a.amount);
+    const topProducts = Array.from(byProduct.values()).sort((a, b) => b.amount - a.amount).slice(0, 10);
+
+    return {
+      categories,
+      topProducts,
+      totalLines: lines.length,
+    };
+  }
+
+  async listLines(tenantId: string, quotationId: string) {
+    // Ensure quotation belongs to tenant
+    await this.findOne(tenantId, quotationId);
+    return this.prisma.quotationLine.findMany({
+      where: { tenantId, quotationId },
+      orderBy: { lineNo: 'asc' },
+      include: { product: true },
+    });
+  }
+
   async create(tenantId: string, createQuotationDto: CreateQuotationDto) {
     // Check if quotation number already exists
     const existing = await this.prisma.quotation.findUnique({
@@ -136,64 +198,174 @@ export class QuotationService {
       throw new BadRequestException(`Failed to parse file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 
-    // Process each row
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      try {
-        const quotationNumber = row.quotationNumber || row['quotationNumber'] || '';
-        const customerName = row.customerName || row['customerName'] || '';
-        const amount = parseFloat(row.amount || row['amount'] || '0');
-        const status = row.status || row['status'] || 'PENDING';
-        const issueDate = row.issueDate || row['issueDate'] || '';
+    const normalized = rows.map((r) => {
+      const recordTypeRaw = String(r.recordType || r.type || r.record_type || '').trim();
+      const recordType = recordTypeRaw ? recordTypeRaw.toUpperCase() : '';
+      const quotationNumber = String(r.quotationNumber || r.quotation_number || '').trim();
+      return { ...r, recordType, quotationNumber };
+    });
 
-        if (!quotationNumber || !customerName || !issueDate) {
-          errors.push(`Row ${i + 2}: Missing required fields (quotationNumber, customerName, issueDate)`);
+    // Group by quotationNumber
+    const byQuotation = new Map<string, Array<{ row: any; idx: number }>>();
+    for (let i = 0; i < normalized.length; i++) {
+      const quotationNumber = normalized[i].quotationNumber;
+      if (!quotationNumber) {
+        errors.push(`Row ${i + 2}: Missing quotationNumber`);
+        failed++;
+        continue;
+      }
+      const arr = byQuotation.get(quotationNumber) || [];
+      arr.push({ row: normalized[i], idx: i });
+      byQuotation.set(quotationNumber, arr);
+    }
+
+    for (const [quotationNumber, group] of byQuotation.entries()) {
+      try {
+        const headerEntry =
+          group.find((g) => g.row.recordType === 'HEADER') ||
+          // backward compatible: treat non-typed row as header
+          group.find((g) => !g.row.recordType || g.row.recordType === 'H');
+
+        const details = group.filter((g) => g.row.recordType === 'DETAIL' || g.row.recordType === 'D');
+        const footerEntry = group.find((g) => g.row.recordType === 'FOOTER' || g.row.recordType === 'F');
+
+        if (!headerEntry) {
+          errors.push(`Quotation ${quotationNumber}: Missing HEADER row`);
           failed++;
           continue;
         }
 
-        // Check if quotation already exists
-        const existing = await this.prisma.quotation.findUnique({
-          where: { quotationNumber },
-        });
+        const h = headerEntry.row;
+        const customerName = String(h.customerName || h.customer_name || '').trim();
+        const issueDate = String(h.issueDate || h.issue_date || '').trim();
+        if (!customerName || !issueDate) {
+          errors.push(`Quotation ${quotationNumber}: Missing required header fields (customerName, issueDate)`);
+          failed++;
+          continue;
+        }
 
-        if (existing) {
-          // Update existing quotation
-          await this.prisma.quotation.update({
-            where: { id: existing.id },
-            data: {
-              customerName: row.customerName || existing.customerName,
-              customerEmail: row.customerEmail || existing.customerEmail || null,
-              customerPhone: row.customerPhone || existing.customerPhone || null,
-              amount: amount || existing.amount,
-              currency: row.currency || existing.currency || 'THB',
-              status: status || existing.status,
-              issueDate: issueDate ? new Date(issueDate) : existing.issueDate,
-              validUntil: row.validUntil ? new Date(row.validUntil) : existing.validUntil,
-              description: row.description || existing.description || null,
-            },
-          });
-        } else {
-          // Create new quotation
-          await this.prisma.quotation.create({
-            data: {
-              tenantId,
-              quotationNumber,
-              customerName,
-              customerEmail: row.customerEmail || null,
-              customerPhone: row.customerPhone || null,
-              amount: amount,
-              currency: row.currency || 'THB',
-              status: status,
-              issueDate: new Date(issueDate),
-              validUntil: row.validUntil ? new Date(row.validUntil) : null,
-              description: row.description || null,
-            },
+        const currency = String(h.currency || 'THB').trim() || 'THB';
+        const status = String(h.status || 'PENDING').trim() || 'PENDING';
+
+        // Parse details & upsert products
+        const linesToCreate: any[] = [];
+        for (let j = 0; j < details.length; j++) {
+          const d = details[j].row;
+          const lineNo = parseInt(String(d.lineNo || d.line_no || j + 1), 10) || j + 1;
+          const productSku = String(d.productSku || d.sku || d.product_sku || '').trim();
+          const productName = String(d.productName || d.name || d.product_name || d.itemName || '').trim();
+          const qty = parseFloat(String(d.quantity || d.qty || d.q || '0')) || 0;
+          const unitPrice = parseFloat(String(d.unitPrice || d.price || d.unit_price || '0')) || 0;
+          const lineAmount =
+            d.lineAmount !== undefined && String(d.lineAmount).trim() !== ''
+              ? parseFloat(String(d.lineAmount))
+              : qty * unitPrice;
+
+          if (!productSku && !productName) {
+            errors.push(`Quotation ${quotationNumber}: Detail row missing productSku/productName (row ${details[j].idx + 2})`);
+            continue;
+          }
+
+          let productId: string | null = null;
+          if (productSku) {
+            const p = await this.prisma.product.upsert({
+              where: { tenantId_sku: { tenantId, sku: productSku } },
+              update: {
+                name: productName || undefined,
+                category: String(d.productCategory || d.category || '').trim() || undefined,
+                currency,
+                price: unitPrice ? unitPrice : undefined,
+              },
+              create: {
+                tenantId,
+                sku: productSku,
+                name: productName || productSku,
+                category: String(d.productCategory || d.category || '').trim() || null,
+                currency,
+                price: unitPrice || null,
+              },
+              select: { id: true },
+            });
+            productId = p.id;
+          }
+
+          linesToCreate.push({
+            tenantId,
+            lineNo,
+            productId,
+            productSku: productSku || null,
+            productName: productName || null,
+            quantity: qty,
+            unitPrice,
+            currency,
+            lineAmount,
+            metadata: { sourceRow: details[j].idx + 2 },
           });
         }
+
+        const computedAmount = linesToCreate.reduce((sum, l) => sum + (parseFloat(String(l.lineAmount || 0)) || 0), 0);
+        const headerAmount = h.amount !== undefined && String(h.amount).trim() !== '' ? parseFloat(String(h.amount)) : null;
+        const amount = headerAmount !== null ? headerAmount : computedAmount;
+
+        const footerMeta = footerEntry?.row
+          ? {
+              subtotal: footerEntry.row.subtotal ? parseFloat(String(footerEntry.row.subtotal)) : undefined,
+              discountTotal: footerEntry.row.discountTotal ? parseFloat(String(footerEntry.row.discountTotal)) : undefined,
+              taxTotal: footerEntry.row.taxTotal ? parseFloat(String(footerEntry.row.taxTotal)) : undefined,
+              grandTotal: footerEntry.row.grandTotal ? parseFloat(String(footerEntry.row.grandTotal)) : undefined,
+              note: footerEntry.row.note || footerEntry.row.footerNote || undefined,
+            }
+          : undefined;
+
+        // Upsert quotation
+        const existing = await this.prisma.quotation.findUnique({ where: { quotationNumber } });
+        const quotation = existing
+          ? await this.prisma.quotation.update({
+              where: { id: existing.id },
+              data: {
+                tenantId,
+                quotationNumber,
+                customerName,
+                customerEmail: h.customerEmail || h.customer_email || existing.customerEmail || null,
+                customerPhone: h.customerPhone || h.customer_phone || existing.customerPhone || null,
+                amount: amount || existing.amount,
+                currency: currency || existing.currency || 'THB',
+                status: status || existing.status,
+                issueDate: issueDate ? new Date(issueDate) : existing.issueDate,
+                validUntil: h.validUntil ? new Date(h.validUntil) : existing.validUntil,
+                description: h.description || existing.description || null,
+                metadata: { ...(existing.metadata as any), footer: footerMeta },
+              },
+            })
+          : await this.prisma.quotation.create({
+              data: {
+                tenantId,
+                quotationNumber,
+                customerName,
+                customerEmail: h.customerEmail || h.customer_email || null,
+                customerPhone: h.customerPhone || h.customer_phone || null,
+                amount,
+                currency,
+                status,
+                issueDate: new Date(issueDate),
+                validUntil: h.validUntil ? new Date(h.validUntil) : null,
+                description: h.description || null,
+                metadata: footerMeta ? { footer: footerMeta } : undefined,
+              },
+            });
+
+        // Replace lines
+        await this.prisma.quotationLine.deleteMany({ where: { tenantId, quotationId: quotation.id } });
+        if (linesToCreate.length > 0) {
+          await this.prisma.quotationLine.createMany({
+            data: linesToCreate.map((l) => ({ ...l, quotationId: quotation.id })),
+            skipDuplicates: false,
+          });
+        }
+
         success++;
       } catch (error) {
-        errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        errors.push(`Quotation ${quotationNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         failed++;
       }
     }

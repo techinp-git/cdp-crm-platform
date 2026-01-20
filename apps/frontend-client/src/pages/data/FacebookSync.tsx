@@ -210,7 +210,7 @@ export function FacebookSync() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-base">Facebook Sync</h1>
+          <h1 className="text-2xl font-bold text-base">Messenger</h1>
           <p className="text-sm text-secondary-text mt-1">
             Sync Facebook Messenger conversations and messages from API or import from file
           </p>

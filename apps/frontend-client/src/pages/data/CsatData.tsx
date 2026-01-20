@@ -15,6 +15,8 @@ interface CsatsItem {
   customerId: string;
   customerName?: string;
   customerEmail?: string;
+  customerPhone?: string;
+  project?: string;
   score: number;
   comment?: string;
   feedbackCategory?: string;
@@ -46,6 +48,7 @@ export function CsatsData() {
     maxScore: '',
     channel: '',
     feedbackCategory: '',
+    project: '',
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -71,6 +74,7 @@ export function CsatsData() {
       if (filters.maxScore) params.append('maxScore', filters.maxScore);
       if (filters.channel) params.append('channel', filters.channel);
       if (filters.feedbackCategory) params.append('feedbackCategory', filters.feedbackCategory);
+      if (filters.project) params.append('project', filters.project);
 
       const response = await fetch(`${apiUrl}/csat-data?${params.toString()}`, {
         headers: {
@@ -185,6 +189,7 @@ export function CsatsData() {
     if (filters.maxScore) params.append('maxScore', filters.maxScore);
     if (filters.channel) params.append('channel', filters.channel);
     if (filters.feedbackCategory) params.append('feedbackCategory', filters.feedbackCategory);
+    if (filters.project) params.append('project', filters.project);
     if (searchQuery) params.append('search', searchQuery);
 
     const response = await fetch(`${apiUrl}/csat-data/export?${params.toString()}`, {
@@ -238,6 +243,60 @@ export function CsatsData() {
   // Get unique channels and categories for filters
   const uniqueChannels = Array.from(new Set(csatsData.map((item: CsatsItem) => item.channel).filter(Boolean)));
   const uniqueCategories = Array.from(new Set(csatsData.map((item: CsatsItem) => item.feedbackCategory).filter(Boolean)));
+  const uniqueProjects = Array.from(new Set(csatsData.map((item: CsatsItem) => item.project).filter(Boolean)));
+
+  const { data: projectSummary } = useQuery(
+    ['csat-project-summary', tenantId, filters, searchQuery],
+    async () => {
+      if (!tenantId) return { projects: [] };
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) params.append('dateTo', filters.dateTo);
+      if (filters.minScore) params.append('minScore', filters.minScore);
+      if (filters.maxScore) params.append('maxScore', filters.maxScore);
+      if (filters.channel) params.append('channel', filters.channel);
+      if (filters.feedbackCategory) params.append('feedbackCategory', filters.feedbackCategory);
+      if (filters.project) params.append('project', filters.project);
+      const response = await fetch(`${apiUrl}/csat-data/projects?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'x-tenant-id': tenantId,
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch CSAT project summary');
+      return response.json();
+    },
+    { enabled: !!tenantId },
+  );
+
+  const { data: customerProject, isLoading: customerProjectLoading } = useQuery(
+    ['csat-customer-project', tenantId, currentPage, limit, filters, searchQuery],
+    async () => {
+      if (!tenantId) return { data: [], total: 0, page: 1, limit: 20, totalPages: 1 };
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: limit.toString(),
+      });
+      if (searchQuery) params.append('search', searchQuery);
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) params.append('dateTo', filters.dateTo);
+      if (filters.minScore) params.append('minScore', filters.minScore);
+      if (filters.maxScore) params.append('maxScore', filters.maxScore);
+      if (filters.channel) params.append('channel', filters.channel);
+      if (filters.feedbackCategory) params.append('feedbackCategory', filters.feedbackCategory);
+      if (filters.project) params.append('project', filters.project);
+      const response = await fetch(`${apiUrl}/csat-data/customer-project?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+          'x-tenant-id': tenantId,
+        },
+      });
+      if (!response.ok) throw new Error('Failed to fetch CSAT customer-project');
+      return response.json();
+    },
+    { enabled: !!tenantId },
+  );
 
   if (isLoading) {
     return (
@@ -303,6 +362,48 @@ export function CsatsData() {
               ? new Date(csatsData[0].createdAt).toLocaleDateString()
               : '-'}
           </div>
+        </div>
+      </div>
+
+      {/* Project Summary */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">Project Summary</h3>
+          <div className="text-sm text-secondary-text">CSAT per project</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-background">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Project</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Customers</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Responses</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Avg Score</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Last</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-border">
+              {(projectSummary?.projects || []).length ? (
+                projectSummary.projects.map((p: any) => (
+                  <tr key={p.project}>
+                    <td className="px-4 py-2 text-sm font-medium">{p.project}</td>
+                    <td className="px-4 py-2 text-sm text-right text-secondary-text">{p.customers}</td>
+                    <td className="px-4 py-2 text-sm text-right text-secondary-text">{p.responses}</td>
+                    <td className="px-4 py-2 text-sm text-right font-medium">{p.avgScore}</td>
+                    <td className="px-4 py-2 text-sm text-right text-secondary-text">
+                      {p.lastSubmittedAt ? new Date(p.lastSubmittedAt).toLocaleDateString() : '-'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-secondary-text">
+                    No projects yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -445,6 +546,26 @@ export function CsatsData() {
               ))}
             </select>
           </div>
+
+          {/* Project */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Project</label>
+            <select
+              className="w-full px-3 py-2 border border-border rounded-md"
+              value={filters.project}
+              onChange={(e) => {
+                setFilters({ ...filters, project: e.target.value });
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">All Projects</option>
+              {uniqueProjects.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="mt-4 flex gap-3">
@@ -457,6 +578,7 @@ export function CsatsData() {
                 maxScore: '',
                 channel: '',
                 feedbackCategory: '',
+                project: '',
               });
               setSearchQuery('');
               setCurrentPage(1);
@@ -465,6 +587,57 @@ export function CsatsData() {
           >
             Clear Filters
           </button>
+        </div>
+      </div>
+
+      {/* Customer score by project */}
+      <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
+        <div className="p-6 border-b border-border">
+          <h2 className="text-lg font-semibold">Customer Scores by Project</h2>
+          <div className="text-sm text-secondary-text mt-1">Grouped by customer + project</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-background">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">Project</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">Customer</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-base uppercase tracking-wider">Responses</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-base uppercase tracking-wider">Avg</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-base uppercase tracking-wider">Last</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-border">
+              {customerProjectLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-secondary-text">
+                    Loading...
+                  </td>
+                </tr>
+              ) : (customerProject?.data || []).length ? (
+                customerProject.data.map((row: any, idx: number) => (
+                  <tr key={`${row.project}-${row.customerKey}-${idx}`} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">{row.project}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-base">{row.customerName || row.customerEmail || row.customerPhone || row.customerKey}</div>
+                      {row.customerEmail ? <div className="text-sm text-secondary-text">{row.customerEmail}</div> : null}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-secondary-text">{row.responses}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium">{row.avgScore}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-secondary-text">
+                      {row.lastSubmittedAt ? new Date(row.lastSubmittedAt).toLocaleDateString() : '-'}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-secondary-text">
+                    No data
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -479,6 +652,9 @@ export function CsatsData() {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-background">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">
+                  Project
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">
                   Customer
                 </th>
@@ -502,6 +678,9 @@ export function CsatsData() {
             <tbody className="bg-white divide-y divide-border">
               {csatsData.map((item: CsatsItem) => (
                 <tr key={item.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-text">
+                    {item.project || '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-base">
                       {item.customerName || item.customerId}
@@ -537,7 +716,7 @@ export function CsatsData() {
               ))}
               {csatsData.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-secondary-text">
+                  <td colSpan={7} className="px-6 py-12 text-center text-secondary-text">
                     No CSAT responses found
                   </td>
                 </tr>

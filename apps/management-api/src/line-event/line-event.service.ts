@@ -85,6 +85,16 @@ export class LineEventService {
         where.timestamp.lte = new Date(filters.endDate);
       }
     }
+    // Filter for group/room events only (used by /data/sources/line-bot)
+    const anyFilters = filters as any;
+    if (anyFilters?.groupOnly) {
+      where.OR = [{ groupId: { not: null } }, { roomId: { not: null } }];
+    }
+    if (anyFilters?.groupOrRoomId) {
+      const id = String(anyFilters.groupOrRoomId);
+      // Ensure we match selected groupId or roomId
+      where.AND = (where.AND || []).concat([{ OR: [{ groupId: id }, { roomId: id }] }]);
+    }
 
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
@@ -171,7 +181,11 @@ export class LineEventService {
     };
   }
 
-  async processWebhook(tenantId: string, webhookData: any): Promise<{ processed: number; failed: number; errors: string[] }> {
+  async processWebhook(
+    tenantId: string,
+    webhookData: any,
+    channelAccountId?: string,
+  ): Promise<{ processed: number; failed: number; errors: string[] }> {
     const errors: string[] = [];
     let processed = 0;
     let failed = 0;
@@ -182,12 +196,15 @@ export class LineEventService {
 
     for (const event of webhookData.events) {
       try {
+        const rawPayload = channelAccountId
+          ? { ...(event || {}), __channelAccountId: channelAccountId }
+          : event;
         const eventData: CreateLineEventDto = {
           eventType: event.type || 'unknown',
           timestamp: event.timestamp ? new Date(parseInt(event.timestamp)) : new Date(),
           mode: event.mode,
           replyToken: event.replyToken,
-          rawPayload: event,
+          rawPayload,
         };
 
         // Extract source information
@@ -233,7 +250,7 @@ export class LineEventService {
             'LINE',
             eventData.messageText,
             eventData.userId,
-            { sourceType: eventData.sourceType, messageId: eventData.messageId },
+            { sourceType: eventData.sourceType, messageId: eventData.messageId, channelAccountId },
           );
         }
         processed++;

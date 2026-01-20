@@ -22,6 +22,63 @@ interface UpdateBillingDto extends Partial<CreateBillingDto> {}
 export class BillingService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
+  async listLines(tenantId: string, billingId: string) {
+    await this.findOne(tenantId, billingId);
+    return this.prisma.billingLine.findMany({
+      where: { tenantId, billingId },
+      orderBy: { lineNo: 'asc' },
+      include: { product: true },
+    });
+  }
+
+  async insights(tenantId: string) {
+    const lines = await this.prisma.billingLine.findMany({
+      where: { tenantId },
+      take: 20000,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        quantity: true,
+        lineAmount: true,
+        currency: true,
+        productSku: true,
+        productName: true,
+        product: { select: { sku: true, name: true, category: true } },
+      },
+    });
+
+    const byCategory = new Map<string, { category: string; amount: number; qty: number; lines: number }>();
+    const byProduct = new Map<
+      string,
+      { key: string; sku: string; name: string; category: string; amount: number; qty: number; lines: number }
+    >();
+
+    for (const l of lines as any[]) {
+      const qty = Number(l.quantity) || 0;
+      const amount = Number(l.lineAmount) || 0;
+      const sku = String(l.product?.sku || l.productSku || '').trim();
+      const name = String(l.product?.name || l.productName || sku || '').trim();
+      const category = String(l.product?.category || 'Uncategorized').trim() || 'Uncategorized';
+      const productKey = sku || name || `${category}::unknown`;
+
+      const c = byCategory.get(category) || { category, amount: 0, qty: 0, lines: 0 };
+      c.amount += amount;
+      c.qty += qty;
+      c.lines += 1;
+      byCategory.set(category, c);
+
+      const p = byProduct.get(productKey) || { key: productKey, sku, name, category, amount: 0, qty: 0, lines: 0 };
+      p.amount += amount;
+      p.qty += qty;
+      p.lines += 1;
+      byProduct.set(productKey, p);
+    }
+
+    const categories = Array.from(byCategory.values()).sort((a, b) => b.amount - a.amount);
+    const topProducts = Array.from(byProduct.values()).sort((a, b) => b.amount - a.amount).slice(0, 10);
+
+    return { categories, topProducts, totalLines: lines.length };
+  }
+
   async create(tenantId: string, createBillingDto: CreateBillingDto) {
     // Check if invoice number already exists
     const existing = await this.prisma.billing.findUnique({

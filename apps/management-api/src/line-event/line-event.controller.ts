@@ -47,6 +47,20 @@ export class LineEventController {
     return this.lineEventService.processWebhook(tenantId, body);
   }
 
+  // Public webhook endpoint for LINE per channel account (multi-OA)
+  @Post('webhook/:tenantId/:channelAccountId')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'LINE Webhook endpoint (Public) - by channel account' })
+  async webhookByAccount(
+    @Param('tenantId') tenantId: string,
+    @Param('channelAccountId') channelAccountId: string,
+    @Body() body: any,
+    @Headers('x-line-signature') signature?: string,
+  ) {
+    return this.lineEventService.processWebhook(tenantId, body, channelAccountId);
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RbacGuard)
   @UseInterceptors(TenantContextInterceptor)
@@ -59,6 +73,8 @@ export class LineEventController {
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('groupOnly') groupOnly?: string,
+    @Query('groupOrRoomId') groupOrRoomId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -72,6 +88,8 @@ export class LineEventController {
       status,
       startDate,
       endDate,
+      groupOnly: groupOnly === '1' || groupOnly === 'true',
+      groupOrRoomId,
       page: pageNum, 
       limit: limitNum 
     });

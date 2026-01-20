@@ -46,12 +46,13 @@ export class LeadController {
     @TenantId() tenantId: string,
     @Query('status') status?: string,
     @Query('source') source?: string,
+    @Query('q') q?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    return this.leadService.findAll(tenantId, { status, source, page: pageNum, limit: limitNum });
+    return this.leadService.findAll(tenantId, { status, source, q, page: pageNum, limit: limitNum });
   }
 
   @Get(':id')
@@ -64,7 +65,7 @@ export class LeadController {
   @Patch(':id')
   @RequirePermissions('lead:write')
   @ApiOperation({ summary: 'Update lead' })
-  update(@Param('id') id: string, @Body() data: Partial<CreateLeadDto>, @TenantId() tenantId: string) {
+  update(@Param('id') id: string, @Body() data: any, @TenantId() tenantId: string) {
     return this.leadService.update(tenantId, id, data);
   }
 

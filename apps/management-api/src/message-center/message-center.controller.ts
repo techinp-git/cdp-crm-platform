@@ -17,7 +17,7 @@ import { RbacGuard } from '../common/guards/rbac.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { TenantContextInterceptor } from '../common/interceptors/tenant-context.interceptor';
 import { TenantId } from '../common/decorators/tenant.decorator';
-import { AudienceDto, MessageCenterService, SendImmediateDto, UpsertImmediateDto } from './message-center.service';
+import { AudienceDto, MessageCenterService, SendImmediateDto, UpsertAutomationDto, UpsertCampaignDto, UpsertImmediateDto } from './message-center.service';
 
 @ApiTags('Message Center')
 @ApiBearerAuth()
@@ -26,6 +26,115 @@ import { AudienceDto, MessageCenterService, SendImmediateDto, UpsertImmediateDto
 @UseInterceptors(TenantContextInterceptor)
 export class MessageCenterController {
   constructor(@Inject(MessageCenterService) private readonly service: MessageCenterService) {}
+
+  @Get('automations')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'List message automations (journeys)' })
+  listAutomations(
+    @TenantId() tenantId: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.listAutomations(tenantId, {
+      status,
+      q,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @Post('automations')
+  @RequirePermissions('message:send')
+  @ApiOperation({ summary: 'Create message automation (journey)' })
+  createAutomation(@TenantId() tenantId: string, @Body() body: UpsertAutomationDto) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.createAutomation(tenantId, body);
+  }
+
+  @Get('automations/:id')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'Get message automation by ID' })
+  getAutomation(@TenantId() tenantId: string, @Param('id') id: string) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.getAutomation(tenantId, id);
+  }
+
+  @Patch('automations/:id')
+  @RequirePermissions('message:send')
+  @ApiOperation({ summary: 'Update message automation' })
+  updateAutomation(@TenantId() tenantId: string, @Param('id') id: string, @Body() body: Partial<UpsertAutomationDto>) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.updateAutomation(tenantId, id, body);
+  }
+
+  @Get('campaigns')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'List campaigns' })
+  listCampaigns(
+    @TenantId() tenantId: string,
+    @Query('channel') channel?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.listCampaigns(tenantId, {
+      channel,
+      status,
+      q,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
+    });
+  }
+
+  @Post('campaigns')
+  @RequirePermissions('message:send')
+  @ApiOperation({ summary: 'Create campaign (scheduled)' })
+  createCampaign(@TenantId() tenantId: string, @Body() body: UpsertCampaignDto) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.createCampaign(tenantId, body);
+  }
+
+  @Get('campaigns/:id')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'Get campaign by ID' })
+  getCampaign(@TenantId() tenantId: string, @Param('id') id: string) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.getCampaign(tenantId, id);
+  }
+
+  @Patch('campaigns/:id')
+  @RequirePermissions('message:send')
+  @ApiOperation({ summary: 'Update campaign' })
+  updateCampaign(@TenantId() tenantId: string, @Param('id') id: string, @Body() body: Partial<UpsertCampaignDto>) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.updateCampaign(tenantId, id, body);
+  }
+
+  @Post('campaigns/:id/run')
+  @RequirePermissions('message:send')
+  @ApiOperation({ summary: 'Run campaign now (creates history)' })
+  runCampaign(@TenantId() tenantId: string, @Param('id') id: string) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.runCampaignNow(tenantId, id);
+  }
+
+  @Get('campaigns/:id/history')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'List history for a campaign' })
+  historyForCampaign(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.listHistoryForCampaign(tenantId, id, page ? parseInt(page, 10) : 1, limit ? parseInt(limit, 10) : 20);
+  }
 
   @Get('immediates')
   @RequirePermissions('message:read')
@@ -150,6 +259,15 @@ export class MessageCenterController {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 50,
     });
+  }
+
+  @Get('deliveries/stats')
+  @RequirePermissions('message:read')
+  @ApiOperation({ summary: 'Delivery stats for a broadcast' })
+  deliveryStats(@TenantId() tenantId: string, @Query('broadcastId') broadcastId?: string) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    if (!broadcastId) throw new BadRequestException('broadcastId is required');
+    return this.service.deliveryStats(tenantId, broadcastId);
   }
 }
 

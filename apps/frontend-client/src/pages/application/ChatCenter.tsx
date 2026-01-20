@@ -63,6 +63,7 @@ export function ChatCenter() {
   const [channelFilter, setChannelFilter] = useState<'ALL' | 'LINE' | 'MESSENGER'>('ALL');
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<Conversation | null>(null);
+  const [replyText, setReplyText] = useState('');
 
   const conversationsQueryKey = useMemo(() => ['chat-center-conversations', tenantId, channelFilter, q], [tenantId, channelFilter, q]);
 
@@ -150,6 +151,33 @@ export function ChatCenter() {
   const messages: ChatMessage[] = messagesQuery.data || [];
   const unifiedUser: UnifiedUser | null = unifiedQuery.data ?? null;
 
+  const replyMutation = useMutation(
+    async () => {
+      if (!selected) throw new Error('No conversation selected');
+      const text = replyText.trim();
+      if (!text) throw new Error('Message is empty');
+      const res = await fetch(`${apiUrl}/chat-center/reply`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+          'x-tenant-id': tenantId,
+        },
+        body: JSON.stringify({ channel: selected.channel, externalId: selected.externalId, text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || 'Send failed');
+      return data;
+    },
+    {
+      onSuccess: () => {
+        setReplyText('');
+        queryClient.invalidateQueries(['chat-center-messages']);
+        queryClient.invalidateQueries(['chat-center-conversations']);
+      },
+    },
+  );
+
   if (!tenantId) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -233,12 +261,28 @@ export function ChatCenter() {
           {selected ? (
             messages.length > 0 ? (
               messages.map((m) => (
-                <div key={m.id} className="bg-white border border-border rounded-lg p-3">
-                  <div className="text-xs text-secondary-text flex items-center justify-between">
-                    <span>{m.direction}</span>
-                    <span>{formatTime(m.timestamp)}</span>
+                <div
+                  key={m.id}
+                  className={`flex ${m.direction === 'OUT' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[85%] border rounded-lg p-3 ${
+                      m.direction === 'OUT'
+                        ? 'bg-black text-white border-black'
+                        : 'bg-white text-base border-border'
+                    }`}
+                  >
+                    <div className={`text-xs flex items-center justify-between gap-4 ${m.direction === 'OUT' ? 'text-white/80' : 'text-secondary-text'}`}>
+                      <span>{m.direction}</span>
+                      <span>{formatTime(m.timestamp)}</span>
+                    </div>
+                    <div className="text-sm mt-2 whitespace-pre-wrap">{m.text || '-'}</div>
+                    {m.meta?.status ? (
+                      <div className={`text-[11px] mt-2 ${m.direction === 'OUT' ? 'text-white/80' : 'text-secondary-text'}`}>
+                        Status: {m.meta.status}{m.meta?.errorMessage ? ` • ${m.meta.errorMessage}` : ''}
+                      </div>
+                    ) : null}
                   </div>
-                  <div className="text-sm mt-2 whitespace-pre-wrap">{m.text || '-'}</div>
                 </div>
               ))
             ) : (
@@ -247,6 +291,34 @@ export function ChatCenter() {
           ) : (
             <div className="text-sm text-secondary-text">Choose a conversation from the left.</div>
           )}
+        </div>
+
+        {/* Composer */}
+        <div className="p-4 border-t border-border bg-white">
+          <div className="flex gap-2 items-end">
+            <textarea
+              className="flex-1 px-3 py-2 border border-border rounded-md text-sm h-16 resize-none"
+              placeholder={selected ? 'Type a reply...' : 'Select a conversation to reply'}
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              disabled={!selected || replyMutation.isLoading}
+            />
+            <button
+              onClick={() => replyMutation.mutate()}
+              disabled={!selected || replyMutation.isLoading || !replyText.trim()}
+              className="px-4 py-2 bg-primary text-base rounded-md font-medium hover:bg-yellow-400 disabled:opacity-50"
+            >
+              {replyMutation.isLoading ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+          {replyMutation.isError ? (
+            <div className="mt-2 text-sm text-error">
+              {replyMutation.error instanceof Error ? replyMutation.error.message : 'Send failed'}
+            </div>
+          ) : null}
+          <div className="mt-2 text-xs text-secondary-text">
+            ตอนนี้เป็นการ “queue” ลง outbox (ส่งจริงต่อ provider เพิ่มได้ภายหลัง)
+          </div>
         </div>
       </div>
 

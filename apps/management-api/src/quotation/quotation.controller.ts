@@ -17,11 +17,12 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { QuotationService } from './quotation.service';
+import { AuditLogService } from '../audit-log/audit-log.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RbacGuard } from '../common/guards/rbac.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { TenantContextInterceptor } from '../common/interceptors/tenant-context.interceptor';
-import { TenantId } from '../common/decorators/tenant.decorator';
+import { CurrentUser, TenantId } from '../common/decorators/tenant.decorator';
 
 @ApiTags('Quotations')
 @ApiBearerAuth()
@@ -29,7 +30,20 @@ import { TenantId } from '../common/decorators/tenant.decorator';
 @UseGuards(JwtAuthGuard, RbacGuard)
 @UseInterceptors(TenantContextInterceptor)
 export class QuotationController {
-  constructor(@Inject(QuotationService) private readonly quotationService: QuotationService) {}
+  constructor(
+    @Inject(QuotationService) private readonly quotationService: QuotationService,
+    @Inject(AuditLogService) private readonly auditLog: AuditLogService,
+  ) {}
+
+  @Get('insights/summary')
+  @RequirePermissions('quotation:read')
+  @ApiOperation({ summary: 'Quotation product insights (category summary & top products)' })
+  insights(@TenantId() tenantId: string) {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant ID is required');
+    }
+    return this.quotationService.insights(tenantId);
+  }
 
   @Post()
   @RequirePermissions('quotation:write')
@@ -69,6 +83,13 @@ export class QuotationController {
     return this.quotationService.findOne(tenantId, id);
   }
 
+  @Get(':id/lines')
+  @RequirePermissions('quotation:read')
+  @ApiOperation({ summary: 'List quotation lines (details)' })
+  listLines(@Param('id') id: string, @TenantId() tenantId: string) {
+    return this.quotationService.listLines(tenantId, id);
+  }
+
   @Patch(':id')
   @RequirePermissions('quotation:write')
   @ApiOperation({ summary: 'Update quotation' })
@@ -88,11 +109,51 @@ export class QuotationController {
   @UseNestInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Import quotation data from CSV/Excel file' })
-  async importFromFile(@UploadedFile() file: Express.Multer.File, @TenantId() tenantId: string) {
+  async importFromFile(
+    @UploadedFile() file: Express.Multer.File,
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+  ) {
     if (!tenantId) {
       throw new BadRequestException('Tenant ID is required');
     }
-    return this.quotationService.importFromFile(tenantId, file);
+    const startedAt = Date.now();
+    try {
+      const result = await this.quotationService.importFromFile(tenantId, file);
+      await this.auditLog.create({
+        tenantId,
+        actorUserId: user?.id,
+        action: 'IMPORT',
+        entity: 'import_job',
+        entityId: 'quotation',
+        payload: {
+          module: 'quotation',
+          endpoint: '/quotations/import',
+          fileName: file?.originalname,
+          fileSize: file?.size,
+          durationMs: Date.now() - startedAt,
+          result,
+        },
+      });
+      return result;
+    } catch (e: any) {
+      await this.auditLog.create({
+        tenantId,
+        actorUserId: user?.id,
+        action: 'IMPORT',
+        entity: 'import_job',
+        entityId: 'quotation',
+        payload: {
+          module: 'quotation',
+          endpoint: '/quotations/import',
+          fileName: file?.originalname,
+          fileSize: file?.size,
+          durationMs: Date.now() - startedAt,
+          errorMessage: e?.message || 'Import failed',
+        },
+      });
+      throw e;
+    }
   }
 
   @Post('sync')

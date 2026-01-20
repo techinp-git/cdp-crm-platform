@@ -50,11 +50,8 @@ export function LineBot() {
       });
       
       // Filter for group/room events only (not 1-on-1)
-      // We'll filter on frontend since backend might not have this filter
-      
-      if (selectedGroupId) {
-        // Note: If backend supports groupId filter, use it here
-      }
+      params.append('groupOnly', '1');
+      if (selectedGroupId) params.append('groupOrRoomId', selectedGroupId);
       if (selectedEventType) {
         params.append('eventType', selectedEventType);
       }

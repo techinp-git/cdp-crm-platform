@@ -21,6 +21,11 @@ export const menuConfig: MenuConfig = {
           path: '/dashboard/cdp',
         },
         {
+          id: 'customer-order-dcp',
+          label: 'Customer, Order & DCP Dashboard',
+          path: '/dashboard/customer-order-dcp',
+        },
+        {
           id: 'event-sdk',
           label: 'Event/SDK Dashboard',
           path: '/dashboard/event-sdk',
@@ -137,11 +142,13 @@ export const menuConfig: MenuConfig = {
           id: 'contact-company',
           label: 'Contact (Company)',
           path: '/data/sources/contact-company',
+          requiresTenantType: ['B2B', 'HYBRID'],
         },
         {
           id: 'quotation',
           label: 'Quotation',
           path: '/data/sources/quotation',
+          requiresTenantType: ['B2B', 'HYBRID'],
         },
         {
           id: 'billing',
@@ -152,11 +159,13 @@ export const menuConfig: MenuConfig = {
           id: 'csat',
           label: 'CSAT',
           path: '/data/sources/csat',
+          requiresTenantType: ['B2B', 'HYBRID'],
         },
         {
           id: 'lead-all',
           label: 'Lead',
           path: '/data/sources/lead-all',
+          requiresTenantType: ['B2B', 'HYBRID'],
         },
         {
           id: 'line-add-friend',
@@ -175,8 +184,13 @@ export const menuConfig: MenuConfig = {
         },
         {
           id: 'facebook-sync',
-          label: 'Facebook Sync',
-          path: '/data/sources/facebook-sync',
+          label: 'Messenger',
+          path: '/data/sources/messenger',
+        },
+        {
+          id: 'facebook-post',
+          label: 'Facebook Post',
+          path: '/data/sources/facebook-post',
         },
       ],
     },
@@ -237,8 +251,8 @@ export const menuConfig: MenuConfig = {
         },
         {
           id: 'data-mapping',
-          label: 'Data Mapping',
-          path: '/settings/data-mapping',
+          label: 'Label Keywords',
+          path: '/settings/label-keywords',
         },
         {
           id: 'custom-field',
@@ -333,9 +347,9 @@ export const menuConfig: MenuConfig = {
         },
         {
           id: 'account-management',
-          label: 'Account Management',
+          label: 'Customer Management',
           description: 'Company',
-          path: '/crm/accounts',
+          path: '/crm/customer-management',
         },
         {
           id: 'contact-management',

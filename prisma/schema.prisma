@@ -71,7 +71,10 @@ model Tenant {
   accounts       Account[]
   contacts       Contact[]
   quotations     Quotation[]
+  quotationLines QuotationLine[]
+  products       Product[]
   billings       Billing[]
+  billingLines   BillingLine[]
   csats          Csat[]
   lineContents   LineContent[]
   messengerContents MessengerContent[]
@@ -80,6 +83,8 @@ model Tenant {
   messageBroadcasts MessageBroadcast[]
   messageDeliveries MessageDelivery[]
   messageImmediates MessageImmediate[]
+  messageCampaigns MessageCampaign[]
+  messageAutomations MessageAutomation[]
   chatAutoRules  ChatAutoRule[]
   chatAutoLogs   ChatAutoLog[]
   chatAutoOutbox ChatAutoOutbox[]
@@ -89,6 +94,8 @@ model Tenant {
   lineEvents     LineEvent[]
   lineFollowers  LineFollower[]
   facebookSyncs  FacebookSync[]
+  facebookPages  FacebookPage[]
+  facebookPosts  FacebookPost[]
   auditLogs      AuditLog[]
 
   @@index([slug])
@@ -560,11 +567,65 @@ model Quotation {
   // Relations
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lines    QuotationLine[]
 
   @@index([tenantId])
   @@index([tenantId, quotationNumber])
   @@index([tenantId, customerId])
   @@map("quotations")
+}
+
+model QuotationLine {
+  id            String   @id @default(uuid())
+  tenantId      String
+  quotationId   String
+  lineNo        Int
+  productId     String?
+  productSku    String?
+  productName   String?
+  quantity      Decimal  @db.Decimal(15, 4)
+  unitPrice     Decimal  @db.Decimal(15, 2)
+  currency      String   @default("THB")
+  lineAmount    Decimal  @db.Decimal(15, 2)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, quotationId, lineNo])
+  @@index([tenantId])
+  @@index([tenantId, quotationId])
+  @@index([tenantId, productId])
+  @@map("quotation_lines")
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  tenantId    String
+  sku         String
+  name        String
+  category    String?
+  description String?
+  price       Decimal? @db.Decimal(15, 2)
+  currency    String   @default("THB")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  QuotationLine[]
+  billingLines BillingLine[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, name])
+  @@index([tenantId, category])
+  @@map("products")
 }
 
 model Billing {
@@ -589,12 +650,41 @@ model Billing {
   // Relations
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  lines    BillingLine[]
 
   @@index([tenantId])
   @@index([tenantId, invoiceNumber])
   @@index([tenantId, customerId])
   @@index([tenantId, status])
   @@map("billings")
+}
+
+model BillingLine {
+  id          String   @id @default(uuid())
+  tenantId    String
+  billingId   String
+  lineNo      Int
+  productId   String?
+  productSku  String?
+  productName String?
+  quantity    Decimal  @db.Decimal(15, 4)
+  unitPrice   Decimal  @db.Decimal(15, 2)
+  currency    String   @default("THB")
+  lineAmount  Decimal  @db.Decimal(15, 2)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  billing Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, billingId, lineNo])
+  @@index([tenantId])
+  @@index([tenantId, billingId])
+  @@index([tenantId, productId])
+  @@map("billing_lines")
 }
 
 model Csat {
@@ -716,6 +806,7 @@ model MessageBroadcast {
   id               String   @id @default(uuid())
   tenantId         String
   immediateId      String?
+  campaignId       String?
   channel          String   // LINE, MESSENGER, EMAIL, SMS
   channelAccountId String?
   templateKind     String?  // LINE_CONTENT, MESSENGER_CONTENT, EMAIL_CONTENT, SMS_CONTENT, RAW
@@ -730,12 +821,66 @@ model MessageBroadcast {
   // Relations
   tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   immediate  MessageImmediate? @relation(fields: [immediateId], references: [id], onDelete: SetNull)
+  campaign   MessageCampaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   deliveries MessageDelivery[]
 
   @@index([tenantId])
   @@index([tenantId, channel])
   @@index([tenantId, createdAt])
+  @@index([tenantId, campaignId])
   @@map("message_broadcasts")
+}
+
+model MessageCampaign {
+  id               String   @id @default(uuid())
+  tenantId         String
+  name             String
+  description      String?
+  status           String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED, ARCHIVED
+  channel          String   // LINE, MESSENGER, EMAIL, SMS
+  channelAccountId String?
+  audience         Json     // { mode, ... }
+  templateKind     String   @default("RAW")
+  templateId       String?
+  payload          Json?    // when templateKind = RAW
+  schedule         Json?    // { cadence: ONCE/DAILY/WEEKLY/MONTHLY, time: "HH:mm", startDate: "YYYY-MM-DD", endDate?: "YYYY-MM-DD", always?: boolean, weekdays?: number[], dayOfMonth?: number }
+  scheduleAt       DateTime?
+  lastRunAt        DateTime?
+  runsCount        Int      @default(0)
+  metadata         Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcasts MessageBroadcast[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, channel])
+  @@index([tenantId, scheduleAt])
+  @@map("message_campaigns")
+}
+
+model MessageAutomation {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  status      String   @default("DRAFT") // DRAFT, ACTIVE, PAUSED, ARCHIVED
+  definition  Json     // { version, kind: MESSAGE_AUTOMATION, nodes, edges, startNodeId }
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("message_automations")
 }
 
 model MessageImmediate {
@@ -794,6 +939,7 @@ model ChatAutoRule {
   status            String   @default("ACTIVE") // ACTIVE, PAUSED
   matchType         String   @default("CONTAINS") // CONTAINS, EQUALS
   keywords          Json     // string[] (tag-like keywords)
+  tagIds            Json?    // string[] - assign these tags to customer when matched
   responseKind      String   @default("LINE_CONTENT") // LINE_CONTENT, MESSENGER_CONTENT, RAW
   lineContentId     String?
   messengerContentId String?
@@ -1014,4 +1160,58 @@ model FacebookSync {
   @@index([tenantId, postId])
   @@index([tenantId, timestamp])
   @@map("facebook_sync")
+}
+
+model FacebookPage {
+  id          String   @id @default(uuid())
+  tenantId    String
+  pageId      String
+  name        String?
+  accessToken String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  posts  FacebookPost[]
+
+  @@unique([tenantId, pageId])
+  @@index([tenantId])
+  @@index([tenantId, pageId])
+  @@map("facebook_pages")
+}
+
+model FacebookPost {
+  id            String   @id @default(uuid())
+  tenantId      String
+  facebookPageId String?
+  pageId        String // FB pageId snapshot
+
+  // Facebook fields
+  facebookPostId String?
+  message        String?
+  link           String?
+  permalinkUrl   String?
+  fullPicture    String?
+  fbCreatedAt    DateTime?
+
+  // Local management
+  status      String   @default("DRAFT") // DRAFT, SYNCED, PUBLISHED, FAILED
+  media       Json?    // [{ type: 'image', url: '...' }]
+  providerMeta Json?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  page   FacebookPage? @relation(fields: [facebookPageId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, facebookPostId])
+  @@index([tenantId])
+  @@index([tenantId, pageId])
+  @@index([tenantId, status])
+  @@index([tenantId, fbCreatedAt])
+  @@map("facebook_posts")
 }

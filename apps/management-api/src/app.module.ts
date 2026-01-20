@@ -21,9 +21,13 @@ import { AnalyticsModule } from './analytics/analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { QuotationModule } from './quotation/quotation.module';
 import { BillingModule } from './billing/billing.module';
+import { CsatDataModule } from './csat-data/csat-data.module';
 import { LineEventModule } from './line-event/line-event.module';
 import { LineFollowerModule } from './line-follower/line-follower.module';
 import { FacebookSyncModule } from './facebook-sync/facebook-sync.module';
+import { FacebookPostModule } from './facebook-post/facebook-post.module';
+import { EventTrackingModule } from './event-tracking/event-tracking.module';
+import { ProfileExplorerModule } from './profile-explorer/profile-explorer.module';
 import { LineContentModule } from './line-content/line-content.module';
 import { MessengerContentModule } from './messenger-content/messenger-content.module';
 import { EmailContentModule } from './email-content/email-content.module';
@@ -33,6 +37,7 @@ import { ChatAutoMessagerModule } from './chat-auto-messager/chat-auto-messager.
 import { ChatCenterModule } from './chat-center/chat-center.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
+import { ApiRequestAuditInterceptor } from './common/interceptors/api-request-audit.interceptor';
 
 @Module({
   imports: [
@@ -59,9 +64,13 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
     AdminModule,
     QuotationModule,
     BillingModule,
+    CsatDataModule,
     LineEventModule,
     LineFollowerModule,
     FacebookSyncModule,
+    FacebookPostModule,
+    EventTrackingModule,
+    ProfileExplorerModule,
     LineContentModule,
     MessengerContentModule,
     EmailContentModule,
@@ -78,6 +87,10 @@ import { TenantContextInterceptor } from './common/interceptors/tenant-context.i
     {
       provide: APP_INTERCEPTOR,
       useClass: TenantContextInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ApiRequestAuditInterceptor,
     },
     Reflector,
   ],

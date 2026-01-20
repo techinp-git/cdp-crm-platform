@@ -21,7 +21,21 @@ interface Billing {
   dueDate?: string;
   paidDate?: string;
   description?: string;
+  metadata?: any;
   createdAt: string;
+}
+
+interface BillingLine {
+  id: string;
+  lineNo: number;
+  productId?: string | null;
+  productSku?: string | null;
+  productName?: string | null;
+  quantity: any;
+  unitPrice: any;
+  currency: string;
+  lineAmount: any;
+  product?: { id: string; sku: string; name: string; category?: string | null } | null;
 }
 
 export function BillingData() {
@@ -37,6 +51,7 @@ export function BillingData() {
   const [importPreview, setImportPreview] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(20);
+  const [selectedBilling, setSelectedBilling] = useState<Billing | null>(null);
 
   // Get billings list with pagination
   const { data: billingsResponse, isLoading } = useQuery(
@@ -61,6 +76,53 @@ export function BillingData() {
   const billings = billingsResponse?.data || [];
   const total = billingsResponse?.total || 0;
   const totalPages = billingsResponse?.totalPages || 1;
+
+  const fmt = (v: any) => {
+    const n = parseFloat(String(v ?? '0'));
+    return Number.isFinite(n) ? n.toLocaleString() : String(v ?? '');
+  };
+
+  const { data: insights } = useQuery(
+    ['billing-insights'],
+    async () => {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/billings/insights/summary`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'x-tenant-id': localStorage.getItem('activeTenantId') || '',
+          },
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.message || 'Failed to fetch billing insights');
+      return body as {
+        categories: Array<{ category: string; amount: number; qty: number; lines: number }>;
+        topProducts: Array<{ key: string; sku: string; name: string; category: string; amount: number; qty: number; lines: number }>;
+      };
+    },
+    { staleTime: 60_000 },
+  );
+
+  const { data: billingLines, isLoading: linesLoading, isError: linesError, error: linesErrorObj } = useQuery(
+    ['billing-lines', selectedBilling?.id],
+    async () => {
+      if (!selectedBilling?.id) return [];
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/billings/${selectedBilling.id}/lines`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'x-tenant-id': localStorage.getItem('activeTenantId') || '',
+          },
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.message || 'Failed to fetch billing lines');
+      return (Array.isArray(body) ? body : []) as BillingLine[];
+    },
+    { enabled: !!selectedBilling?.id },
+  );
 
   // Import file mutation
   const importMutation = useMutation(
@@ -243,6 +305,90 @@ INV-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,PENDING,2024-02-05
         </div>
       </div>
 
+      {/* Product Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm text-secondary-text">Product Category Summary</div>
+              <div className="text-xs text-secondary-text mt-1">by amount (from billing lines)</div>
+            </div>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Category</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Lines</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-border">
+                {(insights?.categories || []).length ? (
+                  (insights?.categories || []).slice(0, 8).map((c) => (
+                    <tr key={c.category}>
+                      <td className="px-3 py-2 text-sm font-medium text-base">{c.category}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{c.lines}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{fmt(c.qty)}</td>
+                      <td className="px-3 py-2 text-sm text-right font-medium">{fmt(c.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-secondary-text">
+                      No product lines yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm text-secondary-text">Top 10 Products</div>
+              <div className="text-xs text-secondary-text mt-1">by amount</div>
+            </div>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Product</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Category</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-border">
+                {(insights?.topProducts || []).length ? (
+                  (insights?.topProducts || []).slice(0, 10).map((p) => (
+                    <tr key={p.key}>
+                      <td className="px-3 py-2 text-sm">
+                        <div className="font-medium text-base">{p.name || '-'}</div>
+                        <div className="text-xs text-secondary-text font-mono">{p.sku}</div>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-secondary-text">{p.category}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{fmt(p.qty)}</td>
+                      <td className="px-3 py-2 text-sm text-right font-medium">{fmt(p.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-secondary-text">
+                      No product lines yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       {/* Billings Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6 border-b border-border">
@@ -275,6 +421,9 @@ INV-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,PENDING,2024-02-05
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">
                   Created At
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-base uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -324,11 +473,19 @@ INV-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,PENDING,2024-02-05
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-text">
                       {new Date(billing.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        className="px-3 py-2 border border-border rounded-md hover:bg-background text-sm"
+                        onClick={() => setSelectedBilling(billing)}
+                      >
+                        View
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-secondary-text">
+                  <td colSpan={9} className="px-6 py-12 text-center text-secondary-text">
                     No billing data found. Import a file or sync from API to get started.
                   </td>
                 </tr>
@@ -594,6 +751,116 @@ INV-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,PENDING,2024-02-05
                   {syncMutation.isLoading ? 'Syncing...' : 'Sync Now'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedBilling && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl">
+            <div className="p-6 border-b border-border">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <h2 className="text-xl font-bold">Billing Detail</h2>
+                  <div className="text-sm text-secondary-text mt-1">
+                    {selectedBilling.invoiceNumber} • {selectedBilling.customerName}
+                  </div>
+                  <div className="text-xs text-secondary-text mt-1">
+                    Issue: {selectedBilling.issueDate ? new Date(selectedBilling.issueDate).toLocaleDateString('th-TH') : '-'} •
+                    Amount: {parseFloat(String(selectedBilling.amount || 0)).toLocaleString()} {selectedBilling.currency || 'THB'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedBilling(null)}
+                  className="text-secondary-text hover:text-base text-2xl"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {linesLoading ? (
+                <div className="text-center py-10 text-secondary-text">Loading details...</div>
+              ) : linesError ? (
+                <div className="p-3 bg-error/10 text-error rounded-md text-sm">
+                  {linesErrorObj instanceof Error ? linesErrorObj.message : 'Failed to load details'}
+                </div>
+              ) : (
+                <>
+                  <div className="border border-border rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-border">
+                      <thead className="bg-background">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Line</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Product</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Unit Price</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Line Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-border">
+                        {(billingLines || []).length ? (
+                          (billingLines || []).map((l) => (
+                            <tr key={l.id}>
+                              <td className="px-4 py-2 text-sm text-secondary-text">{l.lineNo}</td>
+                              <td className="px-4 py-2 text-sm">
+                                <div className="font-medium">
+                                  {l.product?.name || l.productName || '-'}
+                                </div>
+                                <div className="text-xs text-secondary-text font-mono">
+                                  {l.product?.sku || l.productSku || ''}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">{fmt(l.quantity)}</td>
+                              <td className="px-4 py-2 text-sm text-right">{fmt(l.unitPrice)}</td>
+                              <td className="px-4 py-2 text-sm text-right font-medium">{fmt(l.lineAmount)}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-10 text-center text-secondary-text">
+                              No detail lines found for this billing.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {selectedBilling.metadata?.footer ? (
+                    <div className="mt-4 bg-background border border-border rounded-md p-4 text-sm">
+                      <div className="font-semibold mb-2">Footer Summary</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <div className="text-xs text-secondary-text">Subtotal</div>
+                          <div className="font-medium">{fmt(selectedBilling.metadata.footer.subtotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Discount</div>
+                          <div className="font-medium">{fmt(selectedBilling.metadata.footer.discountTotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Tax</div>
+                          <div className="font-medium">{fmt(selectedBilling.metadata.footer.taxTotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Grand Total</div>
+                          <div className="font-medium">{fmt(selectedBilling.metadata.footer.grandTotal)}</div>
+                        </div>
+                      </div>
+                      {selectedBilling.metadata.footer.note ? (
+                        <div className="mt-3 text-secondary-text">
+                          Note: <span className="text-base">{String(selectedBilling.metadata.footer.note)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         </div>

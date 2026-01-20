@@ -24,6 +24,20 @@ export class ChatCenterService {
     if (!d) throw new BadRequestException('UnifiedUserIdentity model not ready. Run prisma generate/db push then restart API.');
     return d;
   }
+  private get outbox() {
+    const d = (this.prisma as any).chatAutoOutbox;
+    if (!d) throw new BadRequestException('ChatAutoOutbox model not ready. Run prisma generate/db push then restart API.');
+    return d;
+  }
+
+  private outboxText(payload: any): string | null {
+    if (!payload) return null;
+    if (typeof payload === 'string') return payload;
+    if (typeof payload?.text === 'string') return payload.text;
+    if (typeof payload?.message === 'string') return payload.message;
+    if (typeof payload?.body === 'string') return payload.body;
+    return null;
+  }
 
   async listChannelAccounts(tenantId: string, channel?: string) {
     const where: any = { tenantId };
@@ -85,18 +99,30 @@ export class ChatCenterService {
       for (const r of raw) {
         const userId = r.userId || 'unknown';
         if (q && !normalize(userId).includes(q)) continue;
-        const last = await this.prisma.lineEvent.findFirst({
+        const lastIn = await this.prisma.lineEvent.findFirst({
           where: { tenantId, userId },
           orderBy: { timestamp: 'desc' },
           select: { messageText: true, timestamp: true, messageType: true },
         });
+        const lastOut = await this.outbox.findFirst({
+          where: { tenantId, channel: 'LINE', destination: userId },
+          orderBy: { createdAt: 'desc' },
+          select: { payload: true, createdAt: true },
+        });
+
+        const inAt = lastIn?.timestamp ? new Date(lastIn.timestamp).getTime() : 0;
+        const outAt = lastOut?.createdAt ? new Date(lastOut.createdAt).getTime() : 0;
+        const useOut = outAt > inAt;
+
+        const lastMessage = useOut ? this.outboxText(lastOut?.payload) || '' : lastIn?.messageText || '';
+        const lastAt = useOut ? lastOut?.createdAt : lastIn?.timestamp || r._max.timestamp;
         results.push({
           id: `LINE:${userId}`,
           channel: 'LINE',
           externalId: userId,
           title: userId,
-          lastMessage: last?.messageText || '',
-          lastAt: last?.timestamp || r._max.timestamp,
+          lastMessage,
+          lastAt,
         });
       }
     }
@@ -112,18 +138,30 @@ export class ChatCenterService {
       for (const r of raw) {
         const cid = r.conversationId;
         if (q && !normalize(cid).includes(q)) continue;
-        const last = await this.prisma.facebookSync.findFirst({
+        const lastIn = await this.prisma.facebookSync.findFirst({
           where: { tenantId, conversationId: cid },
           orderBy: { timestamp: 'desc' },
           select: { messageText: true, timestamp: true, senderName: true },
         });
+        const lastOut = await this.outbox.findFirst({
+          where: { tenantId, channel: 'MESSENGER', destination: cid },
+          orderBy: { createdAt: 'desc' },
+          select: { payload: true, createdAt: true },
+        });
+
+        const inAt = lastIn?.timestamp ? new Date(lastIn.timestamp).getTime() : 0;
+        const outAt = lastOut?.createdAt ? new Date(lastOut.createdAt).getTime() : 0;
+        const useOut = outAt > inAt;
+
+        const lastMessage = useOut ? this.outboxText(lastOut?.payload) || '' : lastIn?.messageText || '';
+        const lastAt = useOut ? lastOut?.createdAt : lastIn?.timestamp || r._max.timestamp;
         results.push({
           id: `MESSENGER:${cid}`,
           channel: 'MESSENGER',
           externalId: cid,
-          title: last?.senderName ? `${last.senderName}` : cid,
-          lastMessage: last?.messageText || '',
-          lastAt: last?.timestamp || r._max.timestamp,
+          title: lastIn?.senderName ? `${lastIn.senderName}` : cid,
+          lastMessage,
+          lastAt,
         });
       }
     }
@@ -143,7 +181,12 @@ export class ChatCenterService {
         orderBy: { timestamp: 'asc' },
         take,
       });
-      return events.map((e) => ({
+      const outs = await this.outbox.findMany({
+        where: { tenantId, channel: 'LINE', destination: externalId },
+        orderBy: { createdAt: 'asc' },
+        take,
+      });
+      const inMsgs = events.map((e) => ({
         id: e.id,
         channel: 'LINE',
         direction: 'IN',
@@ -151,6 +194,17 @@ export class ChatCenterService {
         timestamp: e.timestamp,
         meta: { messageId: e.messageId, messageType: e.messageType },
       }));
+      const outMsgs = outs.map((o: any) => ({
+        id: o.id,
+        channel: 'LINE',
+        direction: 'OUT' as const,
+        text: this.outboxText(o.payload),
+        timestamp: o.createdAt,
+        meta: { status: o.status, errorMessage: o.errorMessage },
+      }));
+      const merged = [...inMsgs, ...outMsgs];
+      merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      return merged.slice(-take);
     }
 
     // MESSENGER/FACEBOOK
@@ -159,7 +213,12 @@ export class ChatCenterService {
       orderBy: { timestamp: 'asc' },
       take,
     });
-    return msgs.map((m) => ({
+    const outs = await this.outbox.findMany({
+      where: { tenantId, channel: 'MESSENGER', destination: externalId },
+      orderBy: { createdAt: 'asc' },
+      take,
+    });
+    const inMsgs = msgs.map((m) => ({
       id: m.id,
       channel: 'MESSENGER',
       direction: 'IN',
@@ -167,6 +226,39 @@ export class ChatCenterService {
       timestamp: m.timestamp,
       meta: { senderId: m.senderId, senderName: m.senderName, messageId: m.messageId, messageType: m.messageType },
     }));
+    const outMsgs = outs.map((o: any) => ({
+      id: o.id,
+      channel: 'MESSENGER',
+      direction: 'OUT' as const,
+      text: this.outboxText(o.payload),
+      timestamp: o.createdAt,
+      meta: { status: o.status, errorMessage: o.errorMessage },
+    }));
+    const merged = [...inMsgs, ...outMsgs];
+    merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return merged.slice(-take);
+  }
+
+  async reply(tenantId: string, body: { channel: string; externalId: string; text: string }) {
+    const ch = String(body?.channel || '').toUpperCase();
+    const externalId = String(body?.externalId || '').trim();
+    const text = String(body?.text || '').trim();
+    if (!ch) throw new BadRequestException('channel is required');
+    if (!externalId) throw new BadRequestException('externalId is required');
+    if (!text) throw new BadRequestException('text is required');
+    if (ch !== 'LINE' && ch !== 'MESSENGER') throw new BadRequestException('Unsupported channel');
+
+    // Persist to outbox (can be processed by a worker/provider later)
+    const created = await this.outbox.create({
+      data: {
+        tenantId,
+        channel: ch,
+        destination: externalId,
+        payload: { text },
+        status: 'PENDING',
+      },
+    });
+    return { ok: true, id: created.id, status: created.status };
   }
 
   // Unify user

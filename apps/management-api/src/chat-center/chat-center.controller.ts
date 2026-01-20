@@ -88,6 +88,14 @@ export class ChatCenterController {
     return this.service.getConversationMessages(tenantId, channel, externalId, limit ? parseInt(limit, 10) : 100);
   }
 
+  @Post('reply')
+  @RequirePermissions('chat-center:write')
+  @ApiOperation({ summary: 'Reply to a conversation (queued in outbox)' })
+  reply(@TenantId() tenantId: string, @Body() body: { channel: string; externalId: string; text: string }) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.reply(tenantId, body);
+  }
+
   // Unify user
   @Get('unified/by-identity')
   @RequirePermissions('chat-center:read')

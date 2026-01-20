@@ -20,7 +20,21 @@ interface Quotation {
   issueDate: string;
   validUntil?: string;
   description?: string;
+  metadata?: any;
   createdAt: string;
+}
+
+interface QuotationLine {
+  id: string;
+  lineNo: number;
+  productId?: string | null;
+  productSku?: string | null;
+  productName?: string | null;
+  quantity: any;
+  unitPrice: any;
+  currency: string;
+  lineAmount: any;
+  product?: { id: string; sku: string; name: string } | null;
 }
 
 export function QuotationData() {
@@ -36,6 +50,7 @@ export function QuotationData() {
   const [importPreview, setImportPreview] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(20);
+  const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
 
   // Get quotations list with pagination
   const { data: quotationsResponse, isLoading } = useQuery(
@@ -60,6 +75,53 @@ export function QuotationData() {
   const quotations = quotationsResponse?.data || [];
   const total = quotationsResponse?.total || 0;
   const totalPages = quotationsResponse?.totalPages || 1;
+
+  const { data: insights } = useQuery(
+    ['quotation-insights'],
+    async () => {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/quotations/insights/summary`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'x-tenant-id': localStorage.getItem('activeTenantId') || '',
+          },
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.message || 'Failed to fetch quotation insights');
+      return body as {
+        categories: Array<{ category: string; amount: number; qty: number; lines: number }>;
+        topProducts: Array<{ key: string; sku: string; name: string; category: string; amount: number; qty: number; lines: number }>;
+      };
+    },
+    { staleTime: 60_000 },
+  );
+
+  const { data: quotationLines, isLoading: linesLoading, isError: linesError, error: linesErrorObj } = useQuery(
+    ['quotation-lines', selectedQuotation?.id],
+    async () => {
+      if (!selectedQuotation?.id) return [];
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/quotations/${selectedQuotation.id}/lines`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+            'x-tenant-id': localStorage.getItem('activeTenantId') || '',
+          },
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.message || 'Failed to fetch quotation lines');
+      return (Array.isArray(body) ? body : []) as QuotationLine[];
+    },
+    { enabled: !!selectedQuotation?.id },
+  );
+
+  const fmt = (v: any) => {
+    const n = parseFloat(String(v ?? '0'));
+    return Number.isFinite(n) ? n.toLocaleString() : String(v ?? '');
+  };
 
   // Import file mutation
   const importMutation = useMutation(
@@ -160,12 +222,15 @@ export function QuotationData() {
 
   const downloadSampleFile = () => {
     // Create sample CSV content
-    const sampleCSV = `quotationNumber,customerName,customerEmail,customerPhone,amount,currency,status,issueDate,validUntil,description
-QT-2024-001,John Smith,john.smith@example.com,+66123456789,50000,THB,PENDING,2024-01-15,2024-02-15,Product A and B quotation
-QT-2024-002,Jane Doe,jane.doe@example.com,+66987654321,75000,THB,ACCEPTED,2024-01-20,2024-02-20,Service package quotation
-QT-2024-003,Acme Corp,contact@acmecorp.com,+66223456789,120000,THB,APPROVED,2024-01-25,2024-02-25,Bulk order quotation
-QT-2024-004,Bob Johnson,bob@example.com,+66334567890,35000,THB,PENDING,2024-02-01,2024-03-01,Custom solution quotation
-QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05,2024-03-05,Annual contract quotation`;
+    // New format: recordType = HEADER/DETAIL/FOOTER
+    const sampleCSV = `recordType,quotationNumber,customerName,customerEmail,customerPhone,currency,status,issueDate,validUntil,description,amount,lineNo,productSku,productName,quantity,unitPrice,lineAmount,subtotal,discountTotal,taxTotal,grandTotal,note
+HEADER,QT-2024-001,John Smith,john.smith@example.com,+66123456789,THB,PENDING,2024-01-15,2024-02-15,Quotation for products,,,,
+DETAIL,QT-2024-001,,,,THB,,,,"",,1,SKU-001,Product A,2,12000,24000,,,,
+DETAIL,QT-2024-001,,,,THB,,,,"",,2,SKU-002,Product B,1,26000,26000,,,,
+FOOTER,QT-2024-001,,,,THB,,,,,50000,,,,,,50000,0,0,50000,Thank you
+HEADER,QT-2024-002,Acme Corp,contact@acme.com,+66223456789,THB,ACCEPTED,2024-01-20,2024-02-20,Service quotation,,,,
+DETAIL,QT-2024-002,,,,THB,,,,"",,1,SVC-001,Service Package,1,75000,75000,,,,
+FOOTER,QT-2024-002,,,,THB,,,,,75000,,,,,,75000,0,0,75000,`;
 
     // Create blob and download
     const blob = new Blob([sampleCSV], { type: 'text/csv;charset=utf-8;' });
@@ -242,6 +307,90 @@ QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05
         </div>
       </div>
 
+      {/* Product Insights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm text-secondary-text">Product Category Summary</div>
+              <div className="text-xs text-secondary-text mt-1">by amount (from quotation lines)</div>
+            </div>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Category</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Lines</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-border">
+                {(insights?.categories || []).length ? (
+                  (insights?.categories || []).slice(0, 8).map((c) => (
+                    <tr key={c.category}>
+                      <td className="px-3 py-2 text-sm font-medium text-base">{c.category}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{c.lines}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{fmt(c.qty)}</td>
+                      <td className="px-3 py-2 text-sm text-right font-medium">{fmt(c.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-secondary-text">
+                      No product lines yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm text-secondary-text">Top 10 Products</div>
+              <div className="text-xs text-secondary-text mt-1">by amount</div>
+            </div>
+          </div>
+          <div className="border border-border rounded-md overflow-hidden">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Product</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Category</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Amount</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-border">
+                {(insights?.topProducts || []).length ? (
+                  (insights?.topProducts || []).slice(0, 10).map((p) => (
+                    <tr key={p.key}>
+                      <td className="px-3 py-2 text-sm">
+                        <div className="font-medium text-base">{p.name || '-'}</div>
+                        <div className="text-xs text-secondary-text font-mono">{p.sku}</div>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-secondary-text">{p.category}</td>
+                      <td className="px-3 py-2 text-sm text-right text-secondary-text">{fmt(p.qty)}</td>
+                      <td className="px-3 py-2 text-sm text-right font-medium">{fmt(p.amount)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-sm text-secondary-text">
+                      No product lines yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       {/* Quotations Table */}
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="p-6 border-b border-border">
@@ -271,6 +420,9 @@ QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-base uppercase tracking-wider">
                   Created At
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-base uppercase tracking-wider">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -315,11 +467,19 @@ QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-text">
                       {new Date(quotation.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        className="px-3 py-2 border border-border rounded-md hover:bg-background text-sm"
+                        onClick={() => setSelectedQuotation(quotation)}
+                      >
+                        View
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-secondary-text">
+                  <td colSpan={8} className="px-6 py-12 text-center text-secondary-text">
                     No quotation data found. Import a file or sync from API to get started.
                   </td>
                 </tr>
@@ -424,16 +584,16 @@ QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05
                 <div className="mt-2 p-3 bg-background rounded-md text-xs">
                   <p className="font-medium mb-1">Required columns:</p>
                   <ul className="list-disc list-inside text-secondary-text space-y-0.5">
+                    <li><code className="bg-white px-1 rounded">recordType</code> - HEADER / DETAIL / FOOTER</li>
                     <li><code className="bg-white px-1 rounded">quotationNumber</code> - Quotation reference number (e.g., QT-2024-001)</li>
-                    <li><code className="bg-white px-1 rounded">customerName</code> - Customer name</li>
-                    <li><code className="bg-white px-1 rounded">customerEmail</code> - Customer email (optional)</li>
-                    <li><code className="bg-white px-1 rounded">customerPhone</code> - Customer phone (optional)</li>
-                    <li><code className="bg-white px-1 rounded">amount</code> - Quotation amount (number)</li>
-                    <li><code className="bg-white px-1 rounded">currency</code> - Currency code (e.g., THB, USD)</li>
-                    <li><code className="bg-white px-1 rounded">status</code> - Status (PENDING, ACCEPTED, APPROVED, REJECTED, CANCELLED)</li>
-                    <li><code className="bg-white px-1 rounded">issueDate</code> - Issue date (YYYY-MM-DD)</li>
-                    <li><code className="bg-white px-1 rounded">validUntil</code> - Valid until date (YYYY-MM-DD, optional)</li>
-                    <li><code className="bg-white px-1 rounded">description</code> - Description (optional)</li>
+                    <li><code className="bg-white px-1 rounded">customerName</code> - (HEADER) Customer name</li>
+                    <li><code className="bg-white px-1 rounded">issueDate</code> - (HEADER) Issue date (YYYY-MM-DD)</li>
+                    <li><code className="bg-white px-1 rounded">productSku</code> - (DETAIL) Product SKU (recommended)</li>
+                    <li><code className="bg-white px-1 rounded">productName</code> - (DETAIL) Product name</li>
+                    <li><code className="bg-white px-1 rounded">quantity</code> - (DETAIL) Quantity</li>
+                    <li><code className="bg-white px-1 rounded">unitPrice</code> - (DETAIL) Unit price</li>
+                    <li><code className="bg-white px-1 rounded">lineAmount</code> - (DETAIL) Optional; if empty, system uses quantity * unitPrice</li>
+                    <li><code className="bg-white px-1 rounded">amount</code> - (HEADER or FOOTER) Optional; if empty, system sums detail lines</li>
                   </ul>
                 </div>
               </div>
@@ -581,6 +741,117 @@ QT-2024-005,ABC Company,sales@abc.com,+66445678901,98000,THB,REJECTED,2024-02-05
                   {syncMutation.isLoading ? 'Syncing...' : 'Sync Now'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedQuotation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl">
+            <div className="p-6 border-b border-border">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <h2 className="text-xl font-bold">Quotation Detail</h2>
+                  <div className="text-sm text-secondary-text mt-1">
+                    {selectedQuotation.quotationNumber} • {selectedQuotation.customerName}
+                  </div>
+                  <div className="text-xs text-secondary-text mt-1">
+                    Issue: {selectedQuotation.issueDate ? new Date(selectedQuotation.issueDate).toLocaleDateString('th-TH') : '-'} •
+                    Amount: {parseFloat(String(selectedQuotation.amount || 0)).toLocaleString()} {selectedQuotation.currency || 'THB'}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedQuotation(null)}
+                  className="text-secondary-text hover:text-base text-2xl"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {linesLoading ? (
+                <div className="text-center py-10 text-secondary-text">Loading details...</div>
+              ) : linesError ? (
+                <div className="p-3 bg-error/10 text-error rounded-md text-sm">
+                  {linesErrorObj instanceof Error ? linesErrorObj.message : 'Failed to load details'}
+                </div>
+              ) : (
+                <>
+                  <div className="border border-border rounded-md overflow-hidden">
+                    <table className="min-w-full divide-y divide-border">
+                      <thead className="bg-background">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Line</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-base uppercase tracking-wider">Product</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Unit Price</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-base uppercase tracking-wider">Line Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-border">
+                        {(quotationLines || []).length ? (
+                          (quotationLines || []).map((l) => (
+                            <tr key={l.id}>
+                              <td className="px-4 py-2 text-sm text-secondary-text">{l.lineNo}</td>
+                              <td className="px-4 py-2 text-sm">
+                                <div className="font-medium">
+                                  {l.product?.name || l.productName || '-'}
+                                </div>
+                                <div className="text-xs text-secondary-text font-mono">
+                                  {l.product?.sku || l.productSku || ''}
+                                </div>
+                              </td>
+                              <td className="px-4 py-2 text-sm text-right">{fmt(l.quantity)}</td>
+                              <td className="px-4 py-2 text-sm text-right">{fmt(l.unitPrice)}</td>
+                              <td className="px-4 py-2 text-sm text-right font-medium">{fmt(l.lineAmount)}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-4 py-10 text-center text-secondary-text">
+                              No detail lines found for this quotation.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Footer summary (if any) */}
+                  {selectedQuotation.metadata?.footer ? (
+                    <div className="mt-4 bg-background border border-border rounded-md p-4 text-sm">
+                      <div className="font-semibold mb-2">Footer Summary</div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                          <div className="text-xs text-secondary-text">Subtotal</div>
+                          <div className="font-medium">{fmt(selectedQuotation.metadata.footer.subtotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Discount</div>
+                          <div className="font-medium">{fmt(selectedQuotation.metadata.footer.discountTotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Tax</div>
+                          <div className="font-medium">{fmt(selectedQuotation.metadata.footer.taxTotal)}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-secondary-text">Grand Total</div>
+                          <div className="font-medium">{fmt(selectedQuotation.metadata.footer.grandTotal)}</div>
+                        </div>
+                      </div>
+                      {selectedQuotation.metadata.footer.note ? (
+                        <div className="mt-3 text-secondary-text">
+                          Note: <span className="text-base">{String(selectedQuotation.metadata.footer.note)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         </div>

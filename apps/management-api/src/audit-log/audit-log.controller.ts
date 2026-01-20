@@ -23,10 +23,20 @@ export class AuditLogController {
     @CurrentUser() user: any,
     @Query('entity') entity?: string,
     @Query('action') action?: string,
-    @Query('actorUserId') actorUserId?: string
+    @Query('actorUserId') actorUserId?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
     const targetTenantId = user.isSuperAdmin ? undefined : tenantId;
-    return this.auditLogService.findAll(targetTenantId, { entity, action, actorUserId });
+    return this.auditLogService.findAll(targetTenantId, {
+      entity,
+      action,
+      actorUserId,
+      q,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
   }
 
   @Get(':id')

@@ -18,7 +18,7 @@ export class LeadService {
 
   async findAll(
     tenantId: string, 
-    filters?: { status?: string; source?: string; page?: number; limit?: number }
+    filters?: { status?: string; source?: string; q?: string; page?: number; limit?: number }
   ): Promise<Lead[] | { data: Lead[]; total: number; page: number; limit: number; totalPages: number }> {
     const where: any = { tenantId };
     if (filters?.status) {
@@ -26,6 +26,19 @@ export class LeadService {
     }
     if (filters?.source) {
       where.source = filters.source;
+    }
+    if (filters?.q) {
+      const q = String(filters.q).trim();
+      if (q) {
+        where.OR = [
+          { firstName: { contains: q, mode: 'insensitive' } },
+          { lastName: { contains: q, mode: 'insensitive' } },
+          { email: { contains: q, mode: 'insensitive' } },
+          { phone: { contains: q, mode: 'insensitive' } },
+          { company: { contains: q, mode: 'insensitive' } },
+          { title: { contains: q, mode: 'insensitive' } },
+        ];
+      }
     }
 
     const page = filters?.page || 1;
@@ -71,7 +84,7 @@ export class LeadService {
     return lead;
   }
 
-  async update(tenantId: string, id: string, data: Partial<CreateLeadDto>): Promise<Lead> {
+  async update(tenantId: string, id: string, data: Partial<CreateLeadDto> & { metadata?: any }): Promise<Lead> {
     await this.findOne(tenantId, id);
     return this.prisma.lead.update({
       where: { id },

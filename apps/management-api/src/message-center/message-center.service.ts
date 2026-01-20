@@ -23,6 +23,7 @@ export interface SendImmediateDto {
   templateId?: string;
   name?: string;
   immediateId?: string;
+  campaignId?: string;
   // Either provide destinations directly OR provide audience (FILTER/MANUAL)
   destinations?: string[]; // email/phone/lineUserId/psid/conversationId
   audience?: AudienceDto;
@@ -40,6 +41,59 @@ export interface UpsertImmediateDto {
   templateId?: string;
   payload?: any;
   metadata?: any;
+}
+
+export interface UpsertCampaignDto {
+  name: string;
+  description?: string;
+  status?: string; // DRAFT, ACTIVE, PAUSED, ARCHIVED
+  channel: Channel;
+  channelAccountId?: string;
+  audience: AudienceDto;
+  templateKind: TemplateKind;
+  templateId?: string;
+  payload?: any;
+  // New schedule config (preferred)
+  schedule?: any;
+  // Backward-compatible single run time (ISO)
+  scheduleAt?: string; // ISO
+  metadata?: any;
+}
+
+export interface UpsertAutomationDto {
+  name: string;
+  description?: string;
+  status?: string; // DRAFT, ACTIVE, PAUSED, ARCHIVED
+  definition: any;
+  metadata?: any;
+}
+
+function normalizeScheduleInput(input: any): any | null {
+  if (!input || typeof input !== 'object') return null;
+  const cadence = String(input.cadence || '').toUpperCase();
+  const time = String(input.time || '').trim();
+  const startDate = String(input.startDate || '').trim();
+  const endDate = input.endDate ? String(input.endDate).trim() : null;
+  const always = input.always === undefined ? true : Boolean(input.always);
+  const weekdays = Array.isArray(input.weekdays) ? input.weekdays.map((x: any) => Number(x)).filter((n: any) => Number.isFinite(n)) : undefined;
+  const dayOfMonth = input.dayOfMonth !== undefined ? Number(input.dayOfMonth) : undefined;
+  if (!cadence) return null;
+  if (!time) return null;
+  if (!startDate) return null;
+  return { cadence, time, startDate, endDate: always ? null : endDate, always, weekdays, dayOfMonth };
+}
+
+function scheduleAtFromSchedule(schedule: any): Date | null {
+  if (!schedule) return null;
+  const cadence = String(schedule.cadence || '').toUpperCase();
+  if (cadence !== 'ONCE') return null;
+  const startDate = String(schedule.startDate || '').trim(); // YYYY-MM-DD
+  const time = String(schedule.time || '').trim(); // HH:mm
+  if (!startDate || !time) return null;
+  const iso = `${startDate}T${time}:00`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
 }
 
 function uniqDestinations(arr: any): string[] {
@@ -68,6 +122,16 @@ function destinationKeyForChannel(channel: Channel): 'email' | 'phone' | 'lineUs
 export class MessageCenterService {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
+  private get automation() {
+    const d = (this.prisma as any).messageAutomation;
+    if (!d) throw new InternalServerErrorException('MessageAutomation model not ready. Run prisma generate/db push then restart API.');
+    return d;
+  }
+  private get campaign() {
+    const d = (this.prisma as any).messageCampaign;
+    if (!d) throw new InternalServerErrorException('MessageCampaign model not ready. Run prisma generate/db push then restart API.');
+    return d;
+  }
   private get immediate() {
     const d = (this.prisma as any).messageImmediate;
     if (!d) throw new InternalServerErrorException('MessageImmediate model not ready. Run prisma generate/db push then restart API.');
@@ -183,6 +247,7 @@ export class MessageCenterService {
       data: {
         tenantId,
         immediateId: dto?.immediateId || null,
+        campaignId: dto?.campaignId || null,
         channel,
         channelAccountId: dto?.channelAccountId || null,
         templateKind,
@@ -209,6 +274,175 @@ export class MessageCenterService {
       queued: destinations.length,
       status: 'QUEUED',
     };
+  }
+
+  async listCampaigns(
+    tenantId: string,
+    filters?: { channel?: string; status?: string; q?: string; page?: number; limit?: number },
+  ) {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+    const where: any = { tenantId };
+    if (filters?.channel) where.channel = String(filters.channel).toUpperCase();
+    if (filters?.status) where.status = String(filters.status).toUpperCase();
+    if (filters?.q) where.name = { contains: filters.q, mode: 'insensitive' };
+
+    const [data, total] = await Promise.all([
+      this.campaign.findMany({ where, orderBy: { updatedAt: 'desc' }, skip, take: limit }),
+      this.campaign.count({ where }),
+    ]);
+
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async createCampaign(tenantId: string, dto: UpsertCampaignDto) {
+    const name = String(dto?.name || '').trim();
+    if (!name) throw new BadRequestException('name is required');
+    const channel = String(dto?.channel || '').toUpperCase() as Channel;
+    if (!channel) throw new BadRequestException('channel is required');
+    const templateKind = String(dto?.templateKind || '').toUpperCase() as TemplateKind;
+    if (!templateKind) throw new BadRequestException('templateKind is required');
+    if (templateKind !== 'RAW' && !dto?.templateId) throw new BadRequestException('templateId is required');
+    if (templateKind === 'RAW' && !dto?.payload) throw new BadRequestException('payload is required for RAW');
+    if (!dto?.audience) throw new BadRequestException('audience is required');
+
+    const schedule = normalizeScheduleInput(dto?.schedule) || null;
+    const scheduleAt = scheduleAtFromSchedule(schedule) || (dto?.scheduleAt ? new Date(dto.scheduleAt) : null);
+
+    return this.campaign.create({
+      data: {
+        tenantId,
+        name,
+        description: dto?.description || null,
+        status: String(dto?.status || 'DRAFT').toUpperCase(),
+        channel,
+        channelAccountId: dto?.channelAccountId || null,
+        audience: dto.audience,
+        templateKind,
+        templateId: dto?.templateId || null,
+        payload: templateKind === 'RAW' ? dto.payload : null,
+        schedule,
+        scheduleAt,
+        metadata: dto?.metadata || null,
+      },
+    });
+  }
+
+  async getCampaign(tenantId: string, id: string) {
+    const item = await this.campaign.findFirst({ where: { id, tenantId } });
+    if (!item) throw new NotFoundException('Campaign not found');
+    return item;
+  }
+
+  async updateCampaign(tenantId: string, id: string, dto: Partial<UpsertCampaignDto>) {
+    await this.getCampaign(tenantId, id);
+    const patch: any = {};
+    if (dto.name !== undefined) patch.name = String(dto.name || '').trim();
+    if (dto.description !== undefined) patch.description = dto.description || null;
+    if (dto.status !== undefined) patch.status = String(dto.status || '').toUpperCase();
+    if (dto.channel !== undefined) patch.channel = String(dto.channel || '').toUpperCase();
+    if (dto.channelAccountId !== undefined) patch.channelAccountId = dto.channelAccountId || null;
+    if (dto.audience !== undefined) patch.audience = dto.audience;
+    if (dto.templateKind !== undefined) patch.templateKind = String(dto.templateKind || '').toUpperCase();
+    if (dto.templateId !== undefined) patch.templateId = dto.templateId || null;
+    if (dto.payload !== undefined) patch.payload = dto.payload || null;
+    if (dto.schedule !== undefined) patch.schedule = normalizeScheduleInput(dto.schedule);
+    if (dto.scheduleAt !== undefined) patch.scheduleAt = dto.scheduleAt ? new Date(dto.scheduleAt) : null;
+    // keep scheduleAt in sync when cadence=ONCE
+    if (dto.schedule !== undefined) patch.scheduleAt = scheduleAtFromSchedule(patch.schedule);
+    if (dto.metadata !== undefined) patch.metadata = dto.metadata || null;
+    return this.campaign.update({ where: { id }, data: patch });
+  }
+
+  async runCampaignNow(tenantId: string, id: string) {
+    const item = await this.getCampaign(tenantId, id);
+    const status = String(item.status || '').toUpperCase();
+    if (status === 'ARCHIVED') throw new BadRequestException('Campaign is archived');
+    if (status === 'PAUSED') throw new BadRequestException('Campaign is paused');
+
+    const dto: SendImmediateDto = {
+      campaignId: id,
+      channel: String(item.channel).toUpperCase() as Channel,
+      channelAccountId: item.channelAccountId || undefined,
+      templateKind: String(item.templateKind).toUpperCase() as TemplateKind,
+      templateId: item.templateId || undefined,
+      name: item.name,
+      audience: item.audience as any,
+      payload: item.payload as any,
+      metadata: { ...(item.metadata as any), source: 'CAMPAIGN', scheduleAt: item.scheduleAt || null },
+    };
+
+    const result = await this.sendImmediate(tenantId, dto);
+    await this.campaign.update({
+      where: { id },
+      data: {
+        lastRunAt: new Date(),
+        runsCount: { increment: 1 },
+        status: status === 'DRAFT' ? 'ACTIVE' : undefined,
+      },
+    });
+    return result;
+  }
+
+  async listHistoryForCampaign(tenantId: string, campaignId: string, page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    const where: any = { tenantId, campaignId };
+    const [data, total] = await Promise.all([
+      this.broadcast.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+      this.broadcast.count({ where }),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async listAutomations(
+    tenantId: string,
+    filters?: { status?: string; q?: string; page?: number; limit?: number },
+  ) {
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 20;
+    const skip = (page - 1) * limit;
+    const where: any = { tenantId };
+    if (filters?.status) where.status = String(filters.status).toUpperCase();
+    if (filters?.q) where.name = { contains: filters.q, mode: 'insensitive' };
+    const [data, total] = await Promise.all([
+      this.automation.findMany({ where, orderBy: { updatedAt: 'desc' }, skip, take: limit }),
+      this.automation.count({ where }),
+    ]);
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async createAutomation(tenantId: string, dto: UpsertAutomationDto) {
+    const name = String(dto?.name || '').trim();
+    if (!name) throw new BadRequestException('name is required');
+    if (!dto?.definition) throw new BadRequestException('definition is required');
+    return this.automation.create({
+      data: {
+        tenantId,
+        name,
+        description: dto?.description || null,
+        status: String(dto?.status || 'DRAFT').toUpperCase(),
+        definition: dto.definition,
+        metadata: dto?.metadata || null,
+      },
+    });
+  }
+
+  async getAutomation(tenantId: string, id: string) {
+    const item = await this.automation.findFirst({ where: { id, tenantId } });
+    if (!item) throw new NotFoundException('Automation not found');
+    return item;
+  }
+
+  async updateAutomation(tenantId: string, id: string, dto: Partial<UpsertAutomationDto>) {
+    await this.getAutomation(tenantId, id);
+    const patch: any = {};
+    if (dto.name !== undefined) patch.name = String(dto.name || '').trim();
+    if (dto.description !== undefined) patch.description = dto.description || null;
+    if (dto.status !== undefined) patch.status = String(dto.status || '').toUpperCase();
+    if (dto.definition !== undefined) patch.definition = dto.definition;
+    if (dto.metadata !== undefined) patch.metadata = dto.metadata || null;
+    return this.automation.update({ where: { id }, data: patch });
   }
 
   async listImmediates(
@@ -367,6 +601,28 @@ export class MessageCenterService {
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  async deliveryStats(tenantId: string, broadcastId: string) {
+    const where: any = { tenantId, broadcastId };
+    const [total, grouped] = await Promise.all([
+      this.delivery.count({ where }),
+      this.delivery.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    const byStatus: Record<string, number> = {};
+    for (const g of grouped as any[]) {
+      byStatus[String(g.status)] = Number(g._count?._all || 0);
+    }
+    return {
+      broadcastId,
+      total,
+      byStatus,
+    };
   }
 }
 

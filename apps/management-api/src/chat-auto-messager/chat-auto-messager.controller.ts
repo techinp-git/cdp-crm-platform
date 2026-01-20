@@ -46,9 +46,10 @@ export class ChatAutoMessagerController {
     @Query('channel') channel?: string,
     @Query('status') status?: string,
     @Query('q') q?: string,
+    @Query('kind') kind?: string,
   ) {
     if (!tenantId) throw new BadRequestException('Tenant ID is required');
-    return this.service.listRules(tenantId, { channel, status, q });
+    return this.service.listRules(tenantId, { channel, status, q, kind });
   }
 
   @Post('rules')
@@ -78,9 +79,21 @@ export class ChatAutoMessagerController {
   @Post('test-match')
   @RequirePermissions('chat-auto-messager:read')
   @ApiOperation({ summary: 'Test keyword matching' })
-  testMatch(@TenantId() tenantId: string, @Body() body: { channel: string; text: string }) {
+  testMatch(@TenantId() tenantId: string, @Body() body: { channel?: string; text: string; kind?: string }) {
     if (!tenantId) throw new BadRequestException('Tenant ID is required');
-    return this.service.testMatch(tenantId, body.channel, body.text);
+    return this.service.testMatch(tenantId, body.channel, body.text, body.kind);
+  }
+
+  // Internal API message ingest (to apply label-keywords rules too)
+  @Post('inbound')
+  @RequirePermissions('chat-auto-messager:write')
+  @ApiOperation({ summary: 'Ingest inbound message (API) and apply rules' })
+  ingestInbound(
+    @TenantId() tenantId: string,
+    @Body() body: { channel: string; destination?: string; text: string; meta?: any },
+  ) {
+    if (!tenantId) throw new BadRequestException('Tenant ID is required');
+    return this.service.handleInbound(tenantId, body.channel, body.text, body.destination, body.meta);
   }
 
   @Get('logs')
@@ -94,9 +107,15 @@ export class ChatAutoMessagerController {
   @Get('outbox')
   @RequirePermissions('chat-auto-messager:read')
   @ApiOperation({ summary: 'List outbox' })
-  outbox(@TenantId() tenantId: string, @Query('channel') channel?: string, @Query('status') status?: string, @Query('limit') limit?: string) {
+  outbox(
+    @TenantId() tenantId: string,
+    @Query('channel') channel?: string,
+    @Query('status') status?: string,
+    @Query('ruleId') ruleId?: string,
+    @Query('limit') limit?: string,
+  ) {
     if (!tenantId) throw new BadRequestException('Tenant ID is required');
-    return this.service.listOutbox(tenantId, { channel, status, limit: limit ? parseInt(limit, 10) : 50 });
+    return this.service.listOutbox(tenantId, { channel, status, ruleId, limit: limit ? parseInt(limit, 10) : 50 } as any);
   }
 }
 
