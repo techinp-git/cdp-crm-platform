@@ -6,6 +6,29 @@ import { menuConfig } from '../config/menu';
 import { useMenuContext } from '../hooks/useMenuContext';
 import { MenuIcon } from './MenuIcon';
 import { TenantSwitcher } from './TenantSwitcher';
+import { useQuery } from 'react-query';
+import api from '../services/api';
+
+function getApiBaseUrl() {
+  return import.meta.env.VITE_API_URL || 'http://localhost:3000';
+}
+
+type TenantMe = {
+  id: string;
+  name: string;
+  slug: string;
+  type?: string;
+  metadata?: any;
+};
+
+function getInitials(name?: string) {
+  const s = String(name || '').trim();
+  if (!s) return 'Y';
+  const parts = s.split(/\s+/).filter(Boolean);
+  const a = parts[0]?.[0] || '';
+  const b = parts.length > 1 ? parts[1]?.[0] || '' : parts[0]?.[1] || '';
+  return (a + b).toUpperCase() || 'Y';
+}
 
 export function Sidebar() {
   const location = useLocation();
@@ -15,13 +38,45 @@ export function Sidebar() {
 
   const filteredMenu = filterMenu(menuConfig, menuContext);
 
+  const selectedTenantName =
+    activeTenant?.name || accessibleTenants[0]?.name || '';
+
+  const { data: tenantMe } = useQuery(
+    ['tenant-me-for-sidebar', activeTenant?.id],
+    async () => {
+      const res = await api.get('/tenants/me');
+      return res.data as TenantMe;
+    },
+    {
+      enabled: !!activeTenant?.id,
+      staleTime: 60_000,
+    }
+  );
+
+  const logoUrl = tenantMe?.metadata?.logoUrl as string | undefined;
+
   // Show empty state if no menu items are visible
   if (filteredMenu.items.length === 0) {
     return (
       <div className="w-64 bg-black text-white flex flex-col h-full">
         <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-primary">YDM Platform</h1>
-          <p className="text-sm text-gray-400">Client Portal</p>
+          <div className="flex items-center gap-3">
+            {logoUrl ? (
+              <img
+                src={`${getApiBaseUrl()}${logoUrl}`}
+                alt="Tenant logo"
+                className="h-10 w-10 rounded bg-white object-contain border border-gray-800"
+              />
+            ) : (
+              <div className="h-10 w-10 rounded bg-gray-900 border border-gray-800 flex items-center justify-center text-xs font-bold text-primary">
+                {getInitials(selectedTenantName)}
+              </div>
+            )}
+            <div>
+              <h1 className="text-xl font-bold text-primary leading-tight">YDM Platform</h1>
+              <p className="text-sm text-gray-400">Client Portal</p>
+            </div>
+          </div>
         </div>
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center">
@@ -57,8 +112,23 @@ export function Sidebar() {
     <div className="w-64 bg-black text-white flex flex-col h-full">
       {/* Header */}
       <div className="p-6 border-b border-gray-800">
-        <h1 className="text-xl font-bold text-primary">YDM Platform</h1>
-        <p className="text-sm text-gray-400">Client Portal</p>
+        <div className="flex items-center gap-3">
+          {logoUrl ? (
+            <img
+              src={`${getApiBaseUrl()}${logoUrl}`}
+              alt="Tenant logo"
+              className="h-10 w-10 rounded bg-white object-contain border border-gray-800"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded bg-gray-900 border border-gray-800 flex items-center justify-center text-xs font-bold text-primary">
+              {getInitials(selectedTenantName)}
+            </div>
+          )}
+          <div>
+            <h1 className="text-xl font-bold text-primary leading-tight">YDM Platform</h1>
+            <p className="text-sm text-gray-400">Client Portal</p>
+          </div>
+        </div>
         {activeTenant ? (
           <div className="mt-2">
             <p className="text-xs text-gray-400">{activeTenant.name}</p>
