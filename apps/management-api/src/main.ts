@@ -2,10 +2,19 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import { mkdirSync } from 'fs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Ensure upload directory exists
+  mkdirSync(join(process.cwd(), 'uploads', 'tenants'), { recursive: true });
+
+  // Serve uploaded files
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -18,7 +27,11 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+    origin: process.env.CORS_ORIGIN?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+    ],
     credentials: true,
   });
 
@@ -33,7 +46,10 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
   } catch (error) {
-    console.warn('Swagger setup failed, continuing without Swagger:', error.message);
+    console.warn(
+      'Swagger setup failed, continuing without Swagger:',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 
   const port = process.env.PORT || 3000;

@@ -1,8 +1,4 @@
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  SUSPENDED = 'SUSPENDED',
-}
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
 export interface User {
   id: string;
@@ -11,7 +7,7 @@ export interface User {
   lastName?: string;
   status: UserStatus;
   isSuperAdmin: boolean;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,7 +19,7 @@ export interface TenantUser {
   status: UserStatus;
   user?: User;
   roles?: Role[];
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,7 +31,7 @@ export interface Role {
   slug: string;
   description?: string;
   isSystem: boolean;
-  permissions?: Permission[];
+  permissions?: any;
   createdAt: Date;
   updatedAt: Date;
 }

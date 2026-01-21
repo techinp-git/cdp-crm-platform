@@ -5,6 +5,8 @@ import { adminApi } from '../services/api';
 
 export function TenantList() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -19,7 +21,7 @@ export function TenantList() {
   const createMutation = useMutation(adminApi.createTenant, {
     onSuccess: () => {
       queryClient.invalidateQueries('tenants');
-      setShowCreateModal(false);
+      closeCreateModal();
       setFormData({
         name: '',
         slug: '',
@@ -30,9 +32,27 @@ export function TenantList() {
     },
   });
 
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+    setLogoFile(null);
+    setLogoPreviewUrl(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate(formData);
+    if (logoFile) {
+      const fd = new FormData();
+      fd.append('name', formData.name);
+      fd.append('slug', formData.slug);
+      fd.append('type', formData.type);
+      fd.append('status', formData.status);
+      if (formData.plan) fd.append('plan', formData.plan);
+      fd.append('logo', logoFile);
+      createMutation.mutate(fd as any);
+    } else {
+      createMutation.mutate(formData);
+    }
   };
 
   const generateSlug = (name: string) => {
@@ -66,7 +86,7 @@ export function TenantList() {
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">Create New Tenant</h2>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={closeCreateModal}
                   className="text-secondary-text hover:text-base text-2xl"
                 >
                   ×
@@ -75,6 +95,46 @@ export function TenantList() {
             </div>
             <form onSubmit={handleSubmit} className="p-6">
               <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Logo (Optional)</label>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-lg border border-border bg-background overflow-hidden flex items-center justify-center">
+                      {logoPreviewUrl ? (
+                        <img src={logoPreviewUrl} alt="Tenant logo preview" className="w-full h-full object-contain" />
+                      ) : (
+                        <span className="text-secondary-text text-2xl">🖼️</span>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="block w-full text-sm"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+                          setLogoFile(file);
+                          setLogoPreviewUrl(file ? URL.createObjectURL(file) : null);
+                        }}
+                      />
+                      <p className="text-xs text-secondary-text mt-1">PNG/JPG/WebP • Max 5MB</p>
+                    </div>
+                    {(logoFile || logoPreviewUrl) && (
+                      <button
+                        type="button"
+                        className="text-sm text-secondary-text hover:text-base"
+                        onClick={() => {
+                          if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+                          setLogoFile(null);
+                          setLogoPreviewUrl(null);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Tenant Name <span className="text-error">*</span>
@@ -203,7 +263,7 @@ export function TenantList() {
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={closeCreateModal}
                   className="px-4 py-2 border border-border rounded-md hover:bg-background"
                 >
                   Cancel

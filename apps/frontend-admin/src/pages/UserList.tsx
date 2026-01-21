@@ -198,7 +198,11 @@ export function UserList() {
           <h1 className="text-2xl font-bold text-base">Users Management</h1>
           {tenantId && (
             <p className="text-sm text-secondary-text mt-1">
-              Users in <span className="font-medium">{tenants?.find((t: any) => t.id === tenantId)?.name || 'selected tenant'}</span>
+              Users in{' '}
+              <span className="font-medium">
+                {(accessibleTenants || tenantContextTenants || [])?.find((t: any) => t.id === tenantId)?.name ||
+                  'selected tenant'}
+              </span>
             </p>
           )}
           {!tenantId && isSuperAdmin && (
@@ -310,7 +314,7 @@ export function UserList() {
                       }
                     >
                       <option value="">No tenant (global user)</option>
-                      {accessibleTenants.map((tenant) => (
+                      {accessibleTenants.map((tenant: any) => (
                         <option key={tenant.id} value={tenant.id}>
                           {tenant.name}
                         </option>

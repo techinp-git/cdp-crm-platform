@@ -168,11 +168,11 @@ export class FacebookSyncService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        const errorData: any = await response.json().catch(() => ({}));
         throw new Error(`HTTP ${response.status}: ${errorData.error?.message || response.statusText}`);
       }
 
-      const responseData = await response.json();
+      const responseData: any = await response.json();
       const conversations = Array.isArray(responseData.data) ? responseData.data : [];
 
       let success = 0;

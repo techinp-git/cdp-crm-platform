@@ -342,9 +342,9 @@ export class CustomerService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json();
+      const responseData: any = await response.json();
 
-      const customers = Array.isArray(responseData) ? responseData : (responseData.customers || responseData.data || []);
+      const customers = Array.isArray(responseData) ? responseData : responseData.customers || responseData.data || [];
 
       if (!Array.isArray(customers)) {
         throw new BadRequestException('Invalid API response format. Expected array of customers.');

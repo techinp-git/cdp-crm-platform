@@ -28,6 +28,8 @@ ENV NODE_ENV=production
 
 WORKDIR /app
 
+RUN apk add --no-cache libc6-compat && (apk add --no-cache openssl1.1-compat || apk add --no-cache openssl)
+
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nestjs
 
@@ -35,6 +37,9 @@ COPY --from=builder --chown=nestjs:nodejs /app/apps/management-api/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/package.json ./
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+
+# Upload directory (must be writable by the app user)
+RUN mkdir -p /app/uploads/tenants && chown -R nestjs:nodejs /app/uploads
 
 USER nestjs
 

@@ -68,7 +68,19 @@ export class LineEventService {
     });
   }
 
-  async findAll(tenantId: string, filters?: { eventType?: string; status?: string; startDate?: string; endDate?: string; page?: number; limit?: number }) {
+  async findAll(
+    tenantId: string,
+    filters?: {
+      eventType?: string;
+      status?: string;
+      startDate?: string;
+      endDate?: string;
+      groupOnly?: boolean;
+      groupOrRoomId?: string;
+      page?: number;
+      limit?: number;
+    }
+  ) {
     const where: any = { tenantId };
     if (filters?.eventType) {
       where.eventType = filters.eventType;
@@ -86,12 +98,11 @@ export class LineEventService {
       }
     }
     // Filter for group/room events only (used by /data/sources/line-bot)
-    const anyFilters = filters as any;
-    if (anyFilters?.groupOnly) {
+    if (filters?.groupOnly) {
       where.OR = [{ groupId: { not: null } }, { roomId: { not: null } }];
     }
-    if (anyFilters?.groupOrRoomId) {
-      const id = String(anyFilters.groupOrRoomId);
+    if (filters?.groupOrRoomId) {
+      const id = String(filters.groupOrRoomId);
       // Ensure we match selected groupId or roomId
       where.AND = (where.AND || []).concat([{ OR: [{ groupId: id }, { roomId: id }] }]);
     }

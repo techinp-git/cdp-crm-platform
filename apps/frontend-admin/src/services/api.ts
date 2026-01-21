@@ -1,13 +1,10 @@
 import axios from 'axios';
-import { LoginDto, AuthResponse, RefreshTokenDto } from '@ydm-platform/types';
+import { LoginDto, AuthResponse } from '@ydm-platform/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Request interceptor: add auth token and tenant header

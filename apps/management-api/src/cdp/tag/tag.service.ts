@@ -71,7 +71,7 @@ export class TagService {
     }
 
     await this.prisma.customerTag.create({
-      data: { customerId, tagId },
+      data: { tenantId, customerId, tagId },
     });
   }
 

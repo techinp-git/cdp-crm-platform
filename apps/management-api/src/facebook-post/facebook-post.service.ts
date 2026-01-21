@@ -141,10 +141,10 @@ export class FacebookPostService {
     const res = await fetch(url.toString(), { method: 'GET', headers: { 'Content-Type': 'application/json' }, signal: controller.signal });
     clearTimeout(timeoutId);
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err: any = await res.json().catch(() => ({}));
       throw new BadRequestException(`Facebook API error: ${err?.error?.message || `HTTP ${res.status}`}`);
     }
-    const json = await res.json().catch(() => ({}));
+    const json: any = await res.json().catch(() => ({}));
     const rows = Array.isArray(json?.data) ? json.data : [];
 
     let success = 0;
@@ -238,7 +238,7 @@ export class FacebookPostService {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: photoParams.toString(),
         });
-        const photoJson = await photoRes.json().catch(() => ({}));
+        const photoJson: any = await photoRes.json().catch(() => ({}));
         if (!photoRes.ok) throw new Error(photoJson?.error?.message || `Photo upload failed (HTTP ${photoRes.status})`);
         attachedMediaFbid = String(photoJson?.id || '').trim() || null;
       }
@@ -256,7 +256,7 @@ export class FacebookPostService {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: feedParams.toString(),
       });
-      const feedJson = await feedRes.json().catch(() => ({}));
+      const feedJson: any = await feedRes.json().catch(() => ({}));
       if (!feedRes.ok) throw new Error(feedJson?.error?.message || `Publish failed (HTTP ${feedRes.status})`);
 
       const facebookPostId = String(feedJson?.id || '').trim() || null;

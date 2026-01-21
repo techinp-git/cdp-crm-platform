@@ -377,6 +377,7 @@ export class QuotationService {
     const errors: string[] = [];
     let success = 0;
     let failed = 0;
+    let externalQuotations: any[] = [];
 
     try {
       const response = await fetch(config.apiUrl, {
@@ -389,7 +390,7 @@ export class QuotationService {
         throw new Error(`API returned status ${response.status}`);
       }
 
-      const externalQuotations = await response.json();
+      externalQuotations = (await response.json()) as any[];
 
       if (!Array.isArray(externalQuotations)) {
         throw new BadRequestException('API response must be an array of quotations');

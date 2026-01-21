@@ -269,6 +269,7 @@ export class BillingService {
     const errors: string[] = [];
     let success = 0;
     let failed = 0;
+    let externalBillings: any[] = [];
 
     try {
       const response = await fetch(config.apiUrl, {
@@ -281,7 +282,7 @@ export class BillingService {
         throw new Error(`API returned status ${response.status}`);
       }
 
-      const externalBillings = await response.json();
+      externalBillings = (await response.json()) as any[];
 
       if (!Array.isArray(externalBillings)) {
         throw new BadRequestException('API response must be an array of billings');

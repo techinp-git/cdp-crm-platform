@@ -1,9 +1,4 @@
-export enum DealStatus {
-  OPEN = 'OPEN',
-  WON = 'WON',
-  LOST = 'LOST',
-  CANCELLED = 'CANCELLED',
-}
+export type DealStatus = 'OPEN' | 'WON' | 'LOST' | 'CANCELLED';
 
 export interface Lead {
   id: string;
@@ -17,7 +12,7 @@ export interface Lead {
   source?: string;
   status: string;
   score?: number;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,13 +23,13 @@ export interface Deal {
   customerId?: string;
   title: string;
   description?: string;
-  amount?: number;
+  amount?: any;
   currency: string;
   stageId: string;
   status: DealStatus;
   expectedCloseDate?: Date;
   actualCloseDate?: Date;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,7 +43,7 @@ export interface DealStage {
   isDefault: boolean;
   isWon: boolean;
   isLost: boolean;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,7 +60,7 @@ export interface ActivityTask {
   status: string;
   customerId?: string;
   dealId?: string;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -79,8 +74,8 @@ export interface Account {
   website?: string;
   phone?: string;
   email?: string;
-  address?: Record<string, any>;
-  metadata?: Record<string, any>;
+  address?: any;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -95,7 +90,7 @@ export interface Contact {
   phone?: string;
   title?: string;
   department?: string;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }

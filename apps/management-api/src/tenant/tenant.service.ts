@@ -10,7 +10,7 @@ export class TenantService {
     @Inject(forwardRef(() => RoleService)) private roleService: RoleService,
   ) {}
 
-  async create(createTenantDto: CreateTenantDto): Promise<Tenant> {
+  async create(createTenantDto: CreateTenantDto & { status?: string; metadata?: Record<string, any> }): Promise<Tenant> {
     // Check if slug exists
     const existing = await this.prisma.tenant.findUnique({
       where: { slug: createTenantDto.slug },
@@ -21,7 +21,7 @@ export class TenantService {
 
     // Create tenant
     const tenant = await this.prisma.tenant.create({
-      data: createTenantDto,
+      data: createTenantDto as any,
     });
 
     // Create default roles for the new tenant
@@ -67,10 +67,22 @@ export class TenantService {
   }
 
   async update(id: string, updateTenantDto: UpdateTenantDto): Promise<Tenant> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    const existingMetadata =
+      existing && typeof (existing as any).metadata === 'object' && (existing as any).metadata !== null
+        ? ((existing as any).metadata as Record<string, any>)
+        : {};
+    const incomingMetadata =
+      updateTenantDto && typeof (updateTenantDto as any).metadata === 'object' && (updateTenantDto as any).metadata !== null
+        ? ((updateTenantDto as any).metadata as Record<string, any>)
+        : undefined;
+
     return this.prisma.tenant.update({
       where: { id },
-      data: updateTenantDto,
+      data: {
+        ...(updateTenantDto as any),
+        ...(incomingMetadata ? { metadata: { ...existingMetadata, ...incomingMetadata } } : {}),
+      },
     });
   }
 

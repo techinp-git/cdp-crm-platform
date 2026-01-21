@@ -2,9 +2,9 @@ export interface Customer {
   id: string;
   tenantId: string;
   type: string;
-  identifiers: Record<string, any>;
-  profile: Record<string, any>;
-  metadata?: Record<string, any>;
+  identifiers: any;
+  profile: any;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,7 +15,7 @@ export interface CustomerEvent {
   customerId: string;
   type: string;
   timestamp: Date;
-  payload?: Record<string, any>;
+  payload?: any;
   createdAt: Date;
 }
 
@@ -24,9 +24,9 @@ export interface Segment {
   tenantId: string;
   name: string;
   description?: string;
-  definition: Record<string, any>;
+  definition: any;
   isDynamic: boolean;
-  metadata?: Record<string, any>;
+  metadata?: any;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,21 +43,21 @@ export interface Tag {
 
 export interface CreateCustomerDto {
   type?: string;
-  identifiers: Record<string, any>;
-  profile: Record<string, any>;
-  metadata?: Record<string, any>;
+  identifiers: any;
+  profile: any;
+  metadata?: any;
 }
 
 export interface CreateCustomerEventDto {
   customerId: string;
   type: string;
   timestamp?: Date;
-  payload?: Record<string, any>;
+  payload?: any;
 }
 
 export interface CreateSegmentDto {
   name: string;
   description?: string;
-  definition: Record<string, any>;
+  definition: any;
   isDynamic?: boolean;
 }

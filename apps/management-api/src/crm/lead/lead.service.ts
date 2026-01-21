@@ -232,9 +232,9 @@ export class LeadService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json();
+      const responseData: any = await response.json();
 
-      const leads = Array.isArray(responseData) ? responseData : (responseData.leads || responseData.data || []);
+      const leads = Array.isArray(responseData) ? responseData : responseData.leads || responseData.data || [];
 
       if (!Array.isArray(leads)) {
         throw new BadRequestException('Invalid API response format. Expected array of leads.');

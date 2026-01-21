@@ -8,6 +8,8 @@ export function TenantDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [roleForm, setRoleForm] = useState({
     name: '',
     slug: '',
@@ -20,6 +22,16 @@ export function TenantDetail() {
     () => adminApi.getTenant(id!),
     { enabled: !!id }
   );
+
+  const updateTenantMutation = useMutation((data: any) => adminApi.updateTenant(id!, data), {
+    onSuccess: () => {
+      queryClient.invalidateQueries(['tenant', id]);
+      queryClient.invalidateQueries('tenants');
+      if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+      setLogoFile(null);
+      setLogoPreviewUrl(null);
+    },
+  });
 
   // Get tenant roles
   const { data: roles = [], isLoading: rolesLoading } = useQuery(
@@ -78,6 +90,13 @@ export function TenantDetail() {
     );
   }
 
+  const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  const logoUrl = tenant?.metadata?.logoUrl
+    ? tenant.metadata.logoUrl.startsWith('http')
+      ? tenant.metadata.logoUrl
+      : `${apiBaseUrl}${tenant.metadata.logoUrl}`
+    : null;
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -88,7 +107,16 @@ export function TenantDetail() {
           >
             ← Back to Tenants
           </button>
-          <h1 className="text-2xl font-bold text-base">{tenant.name}</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg border border-border bg-white overflow-hidden flex items-center justify-center">
+              {logoUrl ? (
+                <img src={logoUrl} alt={`${tenant.name} logo`} className="w-full h-full object-contain" />
+              ) : (
+                <span className="text-secondary-text text-xl">🖼️</span>
+              )}
+            </div>
+            <h1 className="text-2xl font-bold text-base">{tenant.name}</h1>
+          </div>
           <p className="text-sm text-secondary-text mt-1">
             {tenant.type} • {tenant.status}
           </p>
@@ -122,6 +150,73 @@ export function TenantDetail() {
             <p className="text-base font-medium">{tenant.plan || 'N/A'}</p>
           </div>
         </div>
+      </div>
+
+      {/* Branding */}
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-4">Branding</h2>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-lg border border-border bg-background overflow-hidden flex items-center justify-center">
+            {logoPreviewUrl ? (
+              <img src={logoPreviewUrl} alt="Tenant logo preview" className="w-full h-full object-contain" />
+            ) : logoUrl ? (
+              <img src={logoUrl} alt={`${tenant.name} logo`} className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-secondary-text text-2xl">🖼️</span>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium mb-2">Logo</label>
+            <input
+              type="file"
+              accept="image/*"
+              className="block w-full text-sm"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null;
+                if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+                setLogoFile(file);
+                setLogoPreviewUrl(file ? URL.createObjectURL(file) : null);
+              }}
+            />
+            <p className="text-xs text-secondary-text mt-1">PNG/JPG/WebP • Max 5MB</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={!logoFile || updateTenantMutation.isLoading}
+              className="px-4 py-2 bg-primary text-base rounded-md font-medium hover:bg-yellow-400 disabled:opacity-50"
+              onClick={() => {
+                if (!logoFile || !id) return;
+                const fd = new FormData();
+                fd.append('logo', logoFile);
+                updateTenantMutation.mutate(fd as any);
+              }}
+            >
+              {updateTenantMutation.isLoading ? 'Saving...' : 'Save Logo'}
+            </button>
+            {(logoFile || logoPreviewUrl) && (
+              <button
+                type="button"
+                className="text-sm text-secondary-text hover:text-base"
+                onClick={() => {
+                  if (logoPreviewUrl) URL.revokeObjectURL(logoPreviewUrl);
+                  setLogoFile(null);
+                  setLogoPreviewUrl(null);
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+
+        {updateTenantMutation.isError && (
+          <div className="mt-4 p-3 bg-error/10 text-error rounded-md text-sm">
+            {updateTenantMutation.error instanceof Error
+              ? updateTenantMutation.error.message
+              : 'Failed to update tenant logo'}
+          </div>
+        )}
       </div>
 
       {/* Roles Management Section */}

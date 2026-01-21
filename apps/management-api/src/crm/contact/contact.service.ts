@@ -263,8 +263,8 @@ export class ContactService {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json();
-      const contacts = Array.isArray(responseData) ? responseData : (responseData.contacts || responseData.data || []);
+      const responseData: any = await response.json();
+      const contacts = Array.isArray(responseData) ? responseData : responseData.contacts || responseData.data || [];
 
       if (!Array.isArray(contacts)) {
         throw new BadRequestException('Invalid API response format. Expected array of contacts.');

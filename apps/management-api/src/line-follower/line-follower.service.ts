@@ -7,6 +7,7 @@ interface CreateLineFollowerDto {
   pictureUrl?: string;
   status?: string;
   isUnblocked?: boolean;
+  unfollowedAt?: Date;
   metadata?: any;
 }
 
