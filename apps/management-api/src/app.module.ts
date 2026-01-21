@@ -43,6 +43,8 @@ import { ApiRequestAuditInterceptor } from './common/interceptors/api-request-au
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      // Support running from either repo root or apps/management-api
+      envFilePath: ['.env', '../../.env'],
     }),
     PrismaModule,
     AuthModule,
