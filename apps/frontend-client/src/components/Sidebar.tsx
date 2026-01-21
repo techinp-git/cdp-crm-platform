@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
 import { filterMenu } from '@ydm-platform/utils';
@@ -38,6 +39,29 @@ export function Sidebar() {
 
   const filteredMenu = filterMenu(menuConfig, menuContext);
 
+  const storageKey = 'sidebar:expanded-groups:v1';
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(expandedGroups));
+    } catch {
+      // ignore
+    }
+  }, [expandedGroups]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupId]: !(prev[groupId] ?? true) }));
+  };
+
   const selectedTenantName =
     activeTenant?.name || accessibleTenants[0]?.name || '';
 
@@ -48,7 +72,7 @@ export function Sidebar() {
       return res.data as TenantMe;
     },
     {
-      enabled: !!activeTenant?.id,
+      enabled: !!user,
       staleTime: 60_000,
     }
   );
@@ -135,6 +159,9 @@ export function Sidebar() {
             <p className="text-xs text-gray-500 mt-0.5">
               {activeTenant.type || menuContext.tenantType}
             </p>
+            <div className="mt-2">
+              <TenantSwitcher />
+            </div>
           </div>
         ) : tenantLoading ? (
           <p className="text-xs text-gray-500 mt-1">Loading...</p>
@@ -144,6 +171,9 @@ export function Sidebar() {
             <p className="text-xs text-gray-500 mt-0.5">
               {accessibleTenants[0].type || menuContext.tenantType}
             </p>
+            <div className="mt-2">
+              <TenantSwitcher />
+            </div>
           </div>
         ) : menuContext.tenantType ? (
           <p className="text-xs text-gray-400 mt-1">{menuContext.tenantType}</p>
@@ -154,7 +184,13 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto">
         <div className="py-4">
           {filteredMenu.items.map((item) => (
-            <MenuItem key={item.id} item={item} location={location} />
+            <MenuItem
+              key={item.id}
+              item={item}
+              location={location}
+              expandedGroups={expandedGroups}
+              onToggleGroup={toggleGroup}
+            />
           ))}
         </div>
       </nav>
@@ -172,6 +208,8 @@ export function Sidebar() {
 interface MenuItemProps {
   item: any;
   location: any;
+  expandedGroups: Record<string, boolean>;
+  onToggleGroup: (groupId: string) => void;
 }
 
 function normalizePath(p: string) {
@@ -193,7 +231,7 @@ function isActivePath(itemPath: string, currentPath: string, opts?: { exact?: bo
   return cur.startsWith(item + '/');
 }
 
-function MenuItem({ item, location }: MenuItemProps) {
+function MenuItem({ item, location, expandedGroups, onToggleGroup }: MenuItemProps) {
   // Avoid double-highlight for dashboard menu:
   // - "/dashboard" should be active only when exactly on "/dashboard"
   const isActive =
@@ -223,20 +261,49 @@ function MenuItem({ item, location }: MenuItemProps) {
 
   // Category/Group Header (parent with children, no path)
   if (hasChildren && !item.path) {
+    const groupId = String(item.id || item.label || '');
+    const expanded = hasActiveChild || expandedGroups[groupId] !== false; // default expanded
     return (
       <div className="mb-6">
-        {/* Category Header - Bold Yellow Text */}
-        <div className="px-4 py-2 mb-2">
-          <div className="text-xs font-bold text-primary uppercase tracking-wider">
-            {item.label.replace(/[🏠👥🎯💼🧲🤝📞📣🎨📊🔌⚙️💬]/g, '').trim()}
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => onToggleGroup(groupId)}
+          className={`w-full flex items-center gap-3 px-4 py-2 mb-2 rounded-md transition-colors ${
+            expanded ? 'bg-gray-900/60' : 'hover:bg-gray-900/60'
+          }`}
+        >
+          {item.icon ? (
+            <MenuIcon name={item.icon} className="w-4 h-4 text-primary flex-shrink-0" />
+          ) : (
+            <span className="w-4 h-4 flex-shrink-0" />
+          )}
+          <div className="text-xs font-bold text-primary uppercase tracking-wider flex-1 text-left truncate">
+            {String(item.label || '').replace(/[🏠👥🎯💼🧲🤝📞📣🎨📊🔌⚙️💬]/g, '').trim()}
           </div>
-        </div>
-        {/* Category Items */}
-        <div className="space-y-0.5">
-          {item.children.map((child: any) => (
-            <MenuItem key={child.id} item={child} location={location} />
-          ))}
-        </div>
+          <svg
+            className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {expanded ? (
+          <div className="space-y-0.5">
+            {item.children.map((child: any) => (
+              <MenuItem
+                key={child.id}
+                item={child}
+                location={location}
+                expandedGroups={expandedGroups}
+                onToggleGroup={onToggleGroup}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -264,7 +331,13 @@ function MenuItem({ item, location }: MenuItemProps) {
         {/* Sub-items */}
         <div className="ml-4 mt-0.5 space-y-0.5">
           {item.children.map((child: any) => (
-            <MenuItem key={child.id} item={child} location={location} />
+            <MenuItem
+              key={child.id}
+              item={child}
+              location={location}
+              expandedGroups={expandedGroups}
+              onToggleGroup={onToggleGroup}
+            />
           ))}
         </div>
       </div>

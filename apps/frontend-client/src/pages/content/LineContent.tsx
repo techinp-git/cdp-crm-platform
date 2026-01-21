@@ -298,7 +298,7 @@ export function LineContentPage() {
       alert('Please fill required fields for all blocks');
       return;
     }
-    upsertMutation.mutate();
+    upsertMutation.mutate(undefined);
   };
 
   if (mode === 'builder') {

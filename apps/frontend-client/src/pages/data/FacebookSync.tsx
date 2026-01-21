@@ -68,7 +68,9 @@ export function FacebookSync() {
   const totalPages = facebookDataResponse?.totalPages || 1;
 
   // Get unique conversations for filter
-  const uniqueConversations = Array.from(new Set(facebookData.map((item: any) => item.conversationId).filter(Boolean)));
+  const uniqueConversations: string[] = Array.from(
+    new Set(facebookData.map((item: any) => String(item?.conversationId || '').trim()).filter(Boolean))
+  );
 
   // Import file mutation
   const importMutation = useMutation(

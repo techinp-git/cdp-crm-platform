@@ -110,7 +110,6 @@ export function SendMessagePage() {
       setTemplateId(draftResp.templateId || '');
     }
     return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftResp?.id]);
 
   const { data: tagsResp } = useQuery(

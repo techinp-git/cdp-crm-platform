@@ -241,9 +241,15 @@ export function CsatsData() {
   };
 
   // Get unique channels and categories for filters
-  const uniqueChannels = Array.from(new Set(csatsData.map((item: CsatsItem) => item.channel).filter(Boolean)));
-  const uniqueCategories = Array.from(new Set(csatsData.map((item: CsatsItem) => item.feedbackCategory).filter(Boolean)));
-  const uniqueProjects = Array.from(new Set(csatsData.map((item: CsatsItem) => item.project).filter(Boolean)));
+  const uniqueChannels: string[] = Array.from(
+    new Set(csatsData.map((item: CsatsItem) => String(item.channel || '').trim()).filter(Boolean))
+  );
+  const uniqueCategories: string[] = Array.from(
+    new Set(csatsData.map((item: CsatsItem) => String(item.feedbackCategory || '').trim()).filter(Boolean))
+  );
+  const uniqueProjects: string[] = Array.from(
+    new Set(csatsData.map((item: CsatsItem) => String(item.project || '').trim()).filter(Boolean))
+  );
 
   const { data: projectSummary } = useQuery(
     ['csat-project-summary', tenantId, filters, searchQuery],

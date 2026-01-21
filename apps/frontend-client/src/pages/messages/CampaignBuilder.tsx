@@ -169,7 +169,6 @@ export function CampaignBuilderPage() {
       setTemplateId(d.templateId || '');
     }
     return null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftQuery.data?.id]);
 
   const estimateMutation = useMutation(async () => {

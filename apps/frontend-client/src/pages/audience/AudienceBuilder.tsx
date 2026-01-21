@@ -183,7 +183,6 @@ export function AudienceBuilderPage() {
       setSelectedNodeId(nextNodes[0]?.id || '');
       setSelectedEdgeId('');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadQuery.data?.id]);
 
   const saveMutation = useMutation(async () => {

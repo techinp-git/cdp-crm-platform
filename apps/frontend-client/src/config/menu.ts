@@ -1,6 +1,8 @@
 import { MenuConfig } from '@ydm-platform/types';
 
-export const menuConfig: MenuConfig = {
+// The current shared `MenuItem` type is stricter than our local config
+// (we include extra fields like `description` for UI hints). Keep it flexible here.
+export const menuConfig = {
   items: [
     // ============================================
     // CORE MENU (ALL TYPES)
@@ -450,4 +452,4 @@ export const menuConfig: MenuConfig = {
     },
     // Note: Marketing & Engagement uses Core modules (Message Center, Content Management)
   ],
-};
+} as unknown as MenuConfig;

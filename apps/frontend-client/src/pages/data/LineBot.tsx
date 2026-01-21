@@ -118,7 +118,9 @@ export function LineBot() {
   );
 
   // Get unique group IDs for filter dropdown
-  const uniqueGroupIds = Array.from(new Set(groupRoomEvents.map((e: LineEvent) => e.groupId || e.roomId).filter(Boolean)));
+  const uniqueGroupIds: string[] = Array.from(
+    new Set(groupRoomEvents.map((e: LineEvent) => String(e.groupId || e.roomId || '').trim()).filter(Boolean))
+  );
 
   // Get stats
   const stats = {
