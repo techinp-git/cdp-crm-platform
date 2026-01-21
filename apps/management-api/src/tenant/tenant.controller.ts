@@ -44,6 +44,48 @@ export class TenantController {
     return this.tenantService.findOne(tenantId);
   }
 
+  @Patch('me')
+  @ApiOperation({ summary: 'Update current tenant (tenant user self-service)' })
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: diskStorage({
+        destination: TenantController.tenantLogoDestination,
+        filename: (_req, file, cb) => {
+          const safeExt = extname(file.originalname || '').toLowerCase();
+          cb(null, `${randomUUID()}${safeExt}`);
+        },
+      }),
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    })
+  )
+  updateMe(@TenantId() tenantId?: string, @UploadedFile() logo?: Express.Multer.File, @Body() body?: any) {
+    if (!tenantId) {
+      throw new BadRequestException('Tenant not found');
+    }
+
+    const updateTenantDto = body as UpdateTenantDto & { metadata?: Record<string, any> };
+
+    // When using multipart/form-data, `metadata` may arrive as a JSON string.
+    if (updateTenantDto && typeof (updateTenantDto as any).metadata === 'string') {
+      try {
+        (updateTenantDto as any).metadata = JSON.parse(String((updateTenantDto as any).metadata));
+      } catch {
+        // ignore invalid JSON; service will just skip metadata merge
+      }
+    }
+
+    if (logo) {
+      updateTenantDto.metadata = {
+        ...(updateTenantDto.metadata || {}),
+        logoUrl: `/uploads/tenants/${logo.filename}`,
+      };
+    }
+
+    return this.tenantService.update(tenantId, updateTenantDto);
+  }
+
   @Post()
   @RequirePermissions('tenant:write')
   @ApiOperation({ summary: 'Create tenant (Super Admin only)' })

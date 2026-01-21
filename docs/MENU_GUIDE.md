@@ -1,252 +1,252 @@
-# YDM Platform – Menu & Usage Guide
+# YDM Platform – คู่มือเมนูและการใช้งาน
 
-This document lists **all sidebar menus** (from `apps/frontend-client/src/config/menu.ts`) and explains how to use each page at a high level.
+เอกสารนี้รวบรวม **เมนูทั้งหมดในแถบด้านข้าง (Sidebar)** (มาจาก `apps/frontend-client/src/config/menu.ts`) และอธิบายวิธีใช้งานแต่ละหน้าในภาพรวมระดับสูง
 
-## Global concepts (applies to all pages)
+## แนวคิดพื้นฐาน (ใช้ร่วมกันทุกหน้า)
 
-- **Login**: `http://localhost:3001/login`
-- **Tenant (workspace)**: Most data is **multi-tenant**. Make sure you selected the correct tenant in the UI; API calls send `x-tenant-id`.
-- **Permissions (RBAC)**: If you see `403`/unauthorized, the logged-in role may be missing a permission.
-- **API base URL**: by default `http://localhost:3000` (frontend uses `VITE_API_URL`).
+- **เข้าสู่ระบบ (Login)**: `http://localhost:3001/login`
+- **Tenant (Workspace/พื้นที่ทำงาน)**: ข้อมูลส่วนใหญ่เป็นแบบ **Multi-tenant** โปรดตรวจสอบว่าเลือก tenant ถูกต้องใน UI แล้ว เพราะทุก API call จะส่ง header `x-tenant-id`
+- **สิทธิ์ (RBAC)**: ถ้าเจอ `403` หรือ unauthorized แปลว่า role ที่ล็อกอินอยู่ **อาจไม่มี permission** ที่หน้านั้นต้องใช้
+- **API base URL**: ค่าเริ่มต้นคือ `http://localhost:3000` (frontend จะอ่านจาก `VITE_API_URL`)
 
 ## Dashboard
 
-### Overall Dashboard (`/dashboard`)
-- **What it is**: A high-level overview page.
-- **How to use**: Use as entry point; drill down to the specific dashboards below.
+### Dashboard ภาพรวม (`/dashboard`)
+- **คืออะไร**: หน้าสรุปภาพรวมระดับสูง
+- **วิธีใช้**: ใช้เป็นจุดเริ่มต้น แล้วค่อยเจาะลึกไปยัง dashboard เฉพาะด้านด้านล่าง
 
 ### CDP Dashboard (`/dashboard/cdp`)
-- **What it is**: CDP-focused dashboard for marketing teams (KPIs, segments, trends).
-- **How to use**: Monitor customer KPIs; use alongside Audience/Segments and Event Tracking.
+- **คืออะไร**: Dashboard ฝั่ง CDP สำหรับทีมการตลาด (KPI, Segment, Trend)
+- **วิธีใช้**: ติดตาม KPI ลูกค้า และใช้ร่วมกับ **Audience/Segments** และ **Event Tracking**
 
 ### Customer, Order & DCP Dashboard (`/dashboard/customer-order-dcp`)
-- **What it is**: Operational dashboard combining customer/order style KPIs with DCP signals.
-- **How to use**: Quick pulse for sales/ops; compare trends across periods (mock/seed-driven where applicable).
+- **คืออะไร**: Dashboard เชิงปฏิบัติการที่รวม KPI แบบลูกค้า/ออเดอร์ พร้อมสัญญาณจาก DCP
+- **วิธีใช้**: ดูภาพรวมเร็ว ๆ สำหรับทีมขาย/ปฏิบัติการ และเปรียบเทียบแนวโน้มข้ามช่วงเวลา (บางส่วนอิง mock/seed ตามที่มี)
 
 ### Event/SDK Dashboard (`/dashboard/event-sdk`)
-- **What it is**: Event/SDK dashboard for marketing/product teams (funnels, top events, SDK health).
-- **How to use**: Pair with **Event Tracking** to validate event payloads and volume.
+- **คืออะไร**: Dashboard สำหรับทีมการตลาด/โปรดักต์ (Funnel, Top events, สถานะสุขภาพ SDK)
+- **วิธีใช้**: ใช้คู่กับ **Event Tracking** เพื่อตรวจสอบ payload ของ event และปริมาณ event ที่เข้ามา
 
 ## Data & Tracking
 
 ### Event Tracking (`/data/events`)
-- **What it is**: Browse customer events (GA4-style event stream).
-- **How to use**:
-  - Filter/search events, paginate, and open payload details.
-  - Use it to verify tracking instrumentation and data quality.
+- **คืออะไร**: ดู event ของลูกค้า (ลักษณะคล้าย GA4 event stream)
+- **วิธีใช้**:
+  - กรอง/ค้นหา event, เปลี่ยนหน้า (paginate) และเปิดดูรายละเอียด payload
+  - ใช้ตรวจสอบการติดตั้ง tracking และคุณภาพข้อมูล
 
 ### Profile Explorer (`/data/profiles`)
-- **What it is**: Customer list + detail panel.
-- **How to use**:
-  - Search and open a customer profile.
-  - Detail panel separates **Billing (before tracking)** vs **Tracked events** information.
-  - Shows last acquisition signals (product + FB Ads) when available.
+- **คืออะไร**: รายชื่อลูกค้า + แผงรายละเอียด
+- **วิธีใช้**:
+  - ค้นหาและเปิดโปรไฟล์ลูกค้า
+  - แผงรายละเอียดจะแยกข้อมูล **Billing (ก่อนการ tracking)** กับ **Tracked events**
+  - แสดงสัญญาณ acquisition ล่าสุด (product + FB Ads) เมื่อมีข้อมูล
 
 ## Audience
 
 ### Preset Audience (`/audience/preset-audience`)
-- **What it is**: A set of predefined audiences/segments.
-- **How to use**: Choose an existing audience as input for campaigns/broadcasts.
+- **คืออะไร**: กลุ่มผู้ชม/เซกเมนต์ที่เตรียมไว้ล่วงหน้า
+- **วิธีใช้**: เลือก audience ที่มีอยู่แล้วเพื่อใช้เป็น input ในการทำ campaign/broadcast
 
 ### Audience Builder (`/audience/builder`)
-- **What it is**: List of saved “builder” segments.
-- **How to use**:
-  - Create: `/audience/builder/new`
-  - Edit: `/audience/builder/:id`
-  - Build segments using a canvas (nodes/joins/filters) and save as a segment definition.
+- **คืออะไร**: รายการ “builder segments” ที่บันทึกไว้
+- **วิธีใช้**:
+  - สร้างใหม่: `/audience/builder/new`
+  - แก้ไข: `/audience/builder/:id`
+  - สร้าง segment ด้วย canvas (nodes/joins/filters) แล้วบันทึกเป็นนิยามของ segment
 
 ## Content Management
 
 ### LINE Content (`/content/line`)
-- **What it is**: Manage LINE content templates (text/flex/richmenu payloads).
-- **How to use**: Create content once; reuse in Chat Auto Messager and Message Center.
+- **คืออะไร**: จัดการเทมเพลตคอนเทนต์ LINE (text/flex/richmenu payloads)
+- **วิธีใช้**: สร้างคอนเทนต์ครั้งเดียว แล้วนำไป reuse ใน Chat Auto Messager และ Message Center
 
 ### Messenger Content (`/content/messenger`)
-- **What it is**: Manage Messenger payload templates.
-- **How to use**: Create payloads for Messenger responses/broadcasts.
+- **คืออะไร**: จัดการเทมเพลต payload ของ Messenger
+- **วิธีใช้**: สร้าง payload สำหรับการตอบกลับ/การ broadcast ใน Messenger
 
 ### Email Content (`/content/email`)
-- **What it is**: Manage email templates/payloads.
-- **How to use**: Reuse in immediate/campaign messaging.
+- **คืออะไร**: จัดการเทมเพลต/ payload ของอีเมล
+- **วิธีใช้**: นำไป reuse ในการส่งแบบ immediate หรือ campaign
 
 ### SMS Content (`/content/sms`)
-- **What it is**: Manage SMS message templates.
-- **How to use**: Reuse in immediate/campaign messaging.
+- **คืออะไร**: จัดการเทมเพลตข้อความ SMS
+- **วิธีใช้**: นำไป reuse ในการส่งแบบ immediate หรือ campaign
 
 ## Message Center
 
-### Send Message (Immediate) (`/messages/send`)
-- **What it is**: Draft → save → send immediately. Same draft can be sent multiple times.
-- **How to use**:
-  - Create new: `/messages/send/new`
-  - Open/edit: `/messages/send/:id`
-  - Click **Save Draft** to persist.
-  - Click **Send Message** to create a broadcast + delivery records.
-  - Each send creates **History** entries you can review from list/detail.
+### ส่งข้อความ (Immediate) (`/messages/send`)
+- **คืออะไร**: Draft → save → ส่งทันที โดย draft เดิมสามารถส่งซ้ำได้หลายครั้ง
+- **วิธีใช้**:
+  - สร้างใหม่: `/messages/send/new`
+  - เปิด/แก้ไข: `/messages/send/:id`
+  - กด **Save Draft** เพื่อบันทึก
+  - กด **Send Message** เพื่อสร้าง broadcast + records การส่ง (delivery)
+  - ทุกครั้งที่ส่งจะมีรายการ **History** ให้เปิดดูจากหน้า list/detail
 
-### Campaign (Scheduled) (`/messages/campaign`)
-- **What it is**: Scheduled broadcast campaigns.
-- **How to use**:
-  - Create: `/messages/campaign/new`
-  - Edit: `/messages/campaign/:id`
-  - Configure schedule (Once/Daily/Weekly/Monthly, time, start/end, always).
-  - Use **Run now** to generate a broadcast immediately.
+### Campaign (ตั้งเวลาส่ง) (`/messages/campaign`)
+- **คืออะไร**: แคมเปญ broadcast แบบตั้งเวลา
+- **วิธีใช้**:
+  - สร้าง: `/messages/campaign/new`
+  - แก้ไข: `/messages/campaign/:id`
+  - ตั้งค่า schedule (Once/Daily/Weekly/Monthly, เวลา, start/end, always)
+  - ใช้ **Run now** เพื่อสร้าง broadcast ทันที
 
 ### Auto Marketing / Journey (`/messages/automation`)
-- **What it is**: Automation/journey builder with a canvas (start/audience/condition/wait/output nodes).
-- **How to use**:
-  - Create: `/messages/automation/new`
-  - Edit: `/messages/automation/:id`
-  - Build flows by connecting nodes; configure node details in inspector.
+- **คืออะไร**: ระบบ automation/journey builder แบบ canvas (start/audience/condition/wait/output nodes)
+- **วิธีใช้**:
+  - สร้าง: `/messages/automation/new`
+  - แก้ไข: `/messages/automation/:id`
+  - สร้าง flow โดยเชื่อม node และตั้งค่ารายละเอียดของ node ใน inspector
 
-### Message History (`/messages/history`)
-- **What it is**: List all broadcasts (immediate + campaign).
-- **How to use**: Filter/paginate, open a broadcast to see details + delivery list.
+### ประวัติข้อความ (Message History) (`/messages/history`)
+- **คืออะไร**: รายการ broadcast ทั้งหมด (immediate + campaign)
+- **วิธีใช้**: กรอง/เปลี่ยนหน้า แล้วเปิด broadcast เพื่อดูรายละเอียด + รายการ delivery
 
-### Delivery Report (`/messages/report`)
-- **What it is**: Delivery KPIs and per-delivery records for a selected broadcast.
-- **How to use**: Pick a broadcast from the left panel and review totals and delivery statuses.
+### รายงานการส่ง (Delivery Report) (`/messages/report`)
+- **คืออะไร**: KPI การส่ง และ records รายการส่งรายบุคคลสำหรับ broadcast ที่เลือก
+- **วิธีใช้**: เลือก broadcast จากแผงซ้าย แล้วดูยอดรวมและสถานะการส่ง
 
 ## Data Sources
 
 ### Customer (Company) (`/data/sources/customer`)
-- **What it is**: Import/sync company customers.
-- **How to use**: Use to populate CDP/CRM company customer data (B2B).
+- **คืออะไร**: นำเข้า/ซิงก์ลูกค้าประเภทบริษัท
+- **วิธีใช้**: ใช้เติมข้อมูลลูกค้าบริษัทของ CDP/CRM (B2B)
 
 ### Contact (Company) (`/data/sources/contact-company`)
-- **What it is**: Import/sync contacts under companies.
-- **How to use**: Maintain company contact lists for CRM workflows.
+- **คืออะไร**: นำเข้า/ซิงก์รายชื่อผู้ติดต่อภายใต้บริษัท
+- **วิธีใช้**: ใช้ดูแลรายชื่อ contact ของบริษัทสำหรับ workflow ฝั่ง CRM
 
 ### Quotation (`/data/sources/quotation`)
-- **What it is**: Import quotation documents + line items.
-- **How to use**:
-  - Import CSV supports **HEADER / DETAIL / FOOTER** records.
-  - Use **View** action to open detail modal showing line items and footer summary.
-  - Product insights show **Product Category Summary** and **Top 10 Products** above the list.
+- **คืออะไร**: นำเข้าเอกสารใบเสนอราคา + รายการสินค้า (line items)
+- **วิธีใช้**:
+  - การ import CSV รองรับ records แบบ **HEADER / DETAIL / FOOTER**
+  - ใช้ action **View** เพื่อเปิด modal รายละเอียด ดู line items และสรุป footer
+  - ส่วน Product insights จะแสดง **Product Category Summary** และ **Top 10 Products** เหนือรายการ
 
 ### Billing (`/data/sources/billing`)
-- **What it is**: Billing documents + line items, similar to Quotation.
-- **How to use**:
-  - View billing line items in a detail modal.
-  - See product insights (category summary + top products).
+- **คืออะไร**: เอกสารวางบิล + line items (คล้าย Quotation)
+- **วิธีใช้**:
+  - เปิดดู line items ใน modal รายละเอียด
+  - ดู product insights (สรุปตามหมวดหมู่ + top products)
 
 ### CSAT (`/data/sources/csat`)
-- **What it is**: Customer satisfaction responses, grouped by **Project**.
-- **How to use**:
-  - Filter by score/date/channel/category/project.
-  - Review **Project Summary** and **Customer × Project** rollups.
-  - Import CSV or sync (sync is placeholder unless implemented for a real provider).
+- **คืออะไร**: ผลตอบแบบประเมินความพึงพอใจลูกค้า โดยจัดกลุ่มตาม **Project**
+- **วิธีใช้**:
+  - กรองตามคะแนน/วันที่/ช่องทาง/หมวดหมู่/project
+  - ดูสรุป **Project Summary** และ rollups แบบ **Customer × Project**
+  - import CSV หรือ sync (ปุ่ม sync เป็น placeholder หากยังไม่ผูก provider จริง)
 
 ### Lead (`/data/sources/lead-all`)
-- **What it is**: Lead list sourced from imports/integrations.
-- **How to use**: Use as the entry point into the Lead & CRM pipeline.
+- **คืออะไร**: รายการ lead ที่มาจากการ import/integration
+- **วิธีใช้**: ใช้เป็นจุดเริ่มต้นเข้าสู่กระบวนการ Lead & CRM pipeline
 
 ### LINE OA Add Friend (`/data/sources/line-add-friend`)
-- **What it is**: Manage LINE follower/add-friend data.
-- **How to use**: Use to monitor follow/unfollow, link to customers if available.
+- **คืออะไร**: จัดการข้อมูลผู้ติดตาม/เพิ่มเพื่อน LINE
+- **วิธีใช้**: ใช้ติดตาม follow/unfollow และเชื่อมกับลูกค้า (ถ้ามีข้อมูลเชื่อมได้)
 
 ### LINE OA Bot/Group Bot (`/data/sources/line-bot`)
-- **What it is**: Group/room bot event viewer.
-- **How to use**:
-  - View by **Groups** or **Timeline**.
-  - Uses server-side filters (`groupOnly=1`) so group/room events appear immediately.
+- **คืออะไร**: ตัวดู event ของบอทใน group/room
+- **วิธีใช้**:
+  - เลือกดูแบบ **Groups** หรือ **Timeline**
+  - ใช้ server-side filters (`groupOnly=1`) เพื่อให้เห็น event ของ group/room ทันที
 
 ### LINE OA Event (`/data/sources/line-event`)
-- **What it is**: Raw LINE webhook event ingestion viewer.
-- **How to use**:
-  - Use webhook endpoint to ingest events.
-  - Filter by eventType/status/date range.
+- **คืออะไร**: ตัวดู event ดิบที่ ingest จาก LINE webhook
+- **วิธีใช้**:
+  - ยิง webhook endpoint เพื่อ ingest event
+  - กรองตาม eventType/status/ช่วงวันที่
 
 ### Messenger (`/data/sources/messenger`)
-- **What it is**: Messenger sync / data ingestion (and links to Chat apps).
-- **How to use**: Use to verify ingestion and route to Chat Center / Chat Auto Messager.
+- **คืออะไร**: ซิงก์/ingest ข้อมูล Messenger (และเชื่อมไปยังแอปแชท)
+- **วิธีใช้**: ใช้ตรวจสอบการ ingest และเชื่อมไปยัง Chat Center / Chat Auto Messager
 
 ### Facebook Post (`/data/sources/facebook-post`)
-- **What it is**: Manage Facebook posts (sync + draft + publish).
-- **How to use**:
-  - Connect Facebook Pages (page ID + access token).
-  - Create drafts (with image preview) and publish.
-  - Sync posts from Graph API to view details.
+- **คืออะไร**: จัดการโพสต์ Facebook (sync + draft + publish)
+- **วิธีใช้**:
+  - เชื่อม Facebook Pages (page ID + access token)
+  - สร้าง draft (มี preview รูป) และ publish
+  - sync โพสต์จาก Graph API เพื่อดูรายละเอียด
 
 ## Application
 
 ### Chat Center (`/applications/chat-center`)
-- **What it is**: Unified conversation viewer (inbound + outbound).
-- **How to use**:
-  - Open a conversation thread and send replies (outbound is queued and shown in thread).
-  - Derived from LINE events + FB sync + outbox.
+- **คืออะไร**: ตัวดูบทสนทนาแบบรวมศูนย์ (inbound + outbound)
+- **วิธีใช้**:
+  - เปิด thread แล้วตอบกลับ (outbound จะถูก queue และแสดงใน thread)
+  - ข้อมูลถูกสร้างจาก LINE events + FB sync + outbox
 
 ### Chat Auto Messager (`/applications/chat-auto-messager`)
-- **What it is**: Keyword rules that auto-respond and can tag customers.
-- **How to use**:
-  - Create keyword rules for inbound messages.
-  - (Optional) attach **tags** to assign when matched.
-  - View each rule’s **History** (who was messaged).
+- **คืออะไร**: กฎ keyword สำหรับตอบกลับอัตโนมัติ และสามารถแท็กลูกค้าได้
+- **วิธีใช้**:
+  - สร้างกฎ keyword สำหรับข้อความขาเข้า (inbound)
+  - (ทางเลือก) ผูก **tags** เพื่อให้ระบบ assign เมื่อ match
+  - ดู **History** ของแต่ละกฎ (ส่งถึงใครบ้าง)
 
 ## Data Log
 
 ### API Log (`/data/logs/api`)
-- **What it is**: API request logs (placeholder/implementation dependent).
-- **How to use**: Use for troubleshooting integrations and imports.
+- **คืออะไร**: log การเรียก API (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
+- **วิธีใช้**: ใช้ช่วย troubleshoot integration และการ import
 
 ### Import Log (`/data/logs/import`)
-- **What it is**: Import execution log (placeholder/implementation dependent).
-- **How to use**: Debug failed imports and file parsing issues.
+- **คืออะไร**: log การทำงานของ import (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
+- **วิธีใช้**: ใช้ debug import ที่ล้มเหลว และปัญหาการ parse ไฟล์
 
 ### Error Log (`/data/logs/error`)
-- **What it is**: System errors log (placeholder/implementation dependent).
-- **How to use**: Trace runtime errors and background processing issues.
+- **คืออะไร**: log error ของระบบ (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
+- **วิธีใช้**: ใช้ตามรอย runtime errors และงาน background
 
 ## System Setup
 
 ### Channel Setup (`/settings/channels`)
-- **What it is**: Configure **multiple channel accounts** per tenant.
-- **How to use**:
-  - Add multiple **LINE OA** accounts (e.g. Main/Support) and multiple **Facebook** accounts/pages.
-  - Each account is stored as `ChatChannelAccount` with credentials in `metadata`.
+- **คืออะไร**: ตั้งค่า **หลาย channel accounts** ต่อ tenant
+- **วิธีใช้**:
+  - เพิ่มหลายบัญชี **LINE OA** (เช่น Main/Support) และหลายบัญชี/เพจ **Facebook**
+  - แต่ละ account จะถูกเก็บเป็น `ChatChannelAccount` และเก็บ credential ไว้ใน `metadata`
 
 ### API & Webhook (`/settings/api`)
-- **What it is**: Webhook endpoints and flexible per-account metadata configuration.
-- **How to use**:
-  - For **LINE**, use the generated URL per account:  
+- **คืออะไร**: จุด webhook และการตั้งค่า metadata ต่อ account แบบยืดหยุ่น
+- **วิธีใช้**:
+  - สำหรับ **LINE** ให้ใช้ URL ที่ระบบสร้างให้ต่อ account:  
     `POST /line-events/webhook/:tenantId/:channelAccountId`
-  - For other channels, store your receiver URL and validation config in `metadata` (flexible JSON).
+  - สำหรับช่องทางอื่น ให้เก็บ receiver URL และ config การ validate ไว้ใน `metadata` (JSON ยืดหยุ่น)
 
 ### Label Keywords (`/settings/label-keywords`)
-- **What it is**: Global keyword → tag rules used **across all channels**.
-- **How it works**:
-  - When a message is ingested (webhook or API), the system matches keywords and writes `CustomerTag` to the customer profile.
-  - These tags become the “Tag data” you can use later for segmentation/campaigns.
-- **How to use**:
-  - Create rules (keywords → selected tags).
-  - Use **Test Match** to validate matching logic.
+- **คืออะไร**: กฎ “keyword → tag” แบบ global ที่ใช้ได้ **ทุกช่องทาง**
+- **ทำงานอย่างไร**:
+  - เมื่อมีข้อความถูก ingest (จาก webhook หรือ API) ระบบจะ match keyword แล้วเขียน `CustomerTag` ลงในโปรไฟล์ลูกค้า
+  - tag เหล่านี้จะกลายเป็น “Tag data” สำหรับการทำ segmentation/campaigns ภายหลัง
+- **วิธีใช้**:
+  - สร้างกฎ (keywords → เลือก tags)
+  - ใช้ **Test Match** เพื่อทดสอบ logic การ match
 
 ### Custom Field (`/settings/custom-fields`)
-- **What it is**: Manage custom fields (placeholder/implementation dependent).
-- **How to use**: Define extra fields to capture on customers/deals/etc.
+- **คืออะไร**: จัดการ custom fields (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
+- **วิธีใช้**: นิยาม field เพิ่มเติมเพื่อเก็บข้อมูลบน customers/deals ฯลฯ
 
 ### User & Role (`/settings/team`)
-- **What it is**: Team management and role assignment.
-- **How to use**: Add team members, assign roles/permissions (RBAC).
+- **คืออะไร**: จัดการทีมและการกำหนด role
+- **วิธีใช้**: เพิ่มสมาชิกทีม กำหนด roles/permissions (RBAC)
 
 ### Company Profile (`/settings/organization`)
-- **What it is**: Organization settings (placeholder/implementation dependent).
-- **How to use**: Configure company profile, branding, business info.
+- **คืออะไร**: ตั้งค่าองค์กร (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
+- **วิธีใช้**: ตั้งค่าโปรไฟล์บริษัท, branding, ข้อมูลธุรกิจ
 
-## B2C extras (only for tenant types B2C/HYBRID where applicable)
+## ฟีเจอร์เพิ่มเติมสำหรับ B2C (เฉพาะ tenant type B2C/HYBRID ที่เกี่ยวข้อง)
 
 ### Customer Profile (`/customers/profile`)
 ### Timeline (`/customers/timeline`)
 ### Tags/Attributes (`/customers/tags`)
 ### Consent (`/customers/consent`)
-- **What they are**: B2C-centric customer tools (some pages may be placeholder depending on build).
+- **คืออะไร**: เครื่องมือฝั่งลูกค้าแบบ B2C (บางหน้าอาจเป็น placeholder ขึ้นกับ build)
 
-## B2C Insights (B2C only)
+## B2C Insights (เฉพาะ B2C)
 
 ### Engagement (`/insights/engagement`)
 ### Campaign Performance (`/insights/campaign`)
 ### Funnel (`/insights/funnel`)
-- **What they are**: Insight dashboards (placeholder/implementation dependent).
+- **คืออะไร**: Dashboard เชิง insight (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
 
 ## Lead & CRM (B2B/HYBRID)
 
@@ -255,16 +255,16 @@ This document lists **all sidebar menus** (from `apps/frontend-client/src/config
 ### Contact Management (`/crm/contacts`)
 ### Deal/Opportunity (`/crm/deals`)
 ### Activity Log (`/crm/activities`)
-- **What they are**: CRM tools for managing pipeline and activities.
+- **คืออะไร**: เครื่องมือ CRM สำหรับจัดการ pipeline และกิจกรรมต่าง ๆ
 
-## Sales Insight (B2B only)
+## Sales Insight (เฉพาะ B2B)
 
 ### Lead Funnel (`/insights/lead-funnel`)
 ### Deal Stage (`/insights/deal-stage`)
 ### Win/Lost (`/insights/win-lost`)
-- **What they are**: Sales insight dashboards (placeholder/implementation dependent).
+- **คืออะไร**: Dashboard เชิง insight สำหรับฝ่ายขาย (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
 
-## Hybrid extras (HYBRID only)
+## ฟีเจอร์เพิ่มเติมสำหรับ Hybrid (เฉพาะ HYBRID)
 
 ### Customer (Individual) (`/hybrid/customers`)
 ### Account (Company) (`/hybrid/accounts`)
@@ -273,13 +273,13 @@ This document lists **all sidebar menus** (from `apps/frontend-client/src/config
 ### Lead Management (`/hybrid/leads`)
 ### Deal/Opportunity (`/hybrid/deals`)
 ### Pipeline (`/hybrid/pipeline`)
-- **What they are**: Hybrid tenant workflows (placeholder/implementation dependent).
+- **คืออะไร**: Workflow สำหรับ tenant แบบ Hybrid (ขึ้นกับการ implement/บางส่วนเป็น placeholder)
 
 ---
 
-## Notes for developers
+## หมายเหตุสำหรับนักพัฒนา (Developers)
 
-- Sidebar menus come from `apps/frontend-client/src/config/menu.ts`.
-- Main routes are registered in `apps/frontend-client/src/App.tsx` (`/settings/*` routes are nested in `apps/frontend-client/src/pages/Settings.tsx`).
-- Multi-channel accounts are stored in `ChatChannelAccount` (`prisma/schema.prisma`), accessed via `/chat-center/channel-accounts`.
+- เมนู sidebar มาจาก `apps/frontend-client/src/config/menu.ts`
+- route หลักถูก register ใน `apps/frontend-client/src/App.tsx` (route ภายใต้ `/settings/*` เป็น nested ใน `apps/frontend-client/src/pages/Settings.tsx`)
+- multi-channel accounts ถูกเก็บใน `ChatChannelAccount` (`prisma/schema.prisma`) และเรียกผ่าน `/chat-center/channel-accounts`
 

@@ -22,7 +22,24 @@ function pick<T>(arr: T[]): T {
 async function main() {
   console.log('🌱 Backfilling sample quotation lines...');
 
-  const tenants = await prisma.tenant.findMany({ select: { id: true, slug: true } });
+  // Optional filter:
+  // - `--tenantSlug acme-corp`
+  // - `TENANT_SLUG=acme-corp`
+  const args = process.argv.slice(2);
+  const slugFromArgs = (() => {
+    const i = args.findIndex((a) => a === '--tenantSlug' || a === '--tenant-slug');
+    if (i >= 0 && args[i + 1]) return String(args[i + 1]).trim();
+    return '';
+  })();
+  const tenantSlug = (process.env.TENANT_SLUG || slugFromArgs || '').trim();
+
+  const tenants = await prisma.tenant.findMany({
+    where: tenantSlug ? { slug: tenantSlug } : undefined,
+    select: { id: true, slug: true },
+  });
+  if (tenantSlug && tenants.length === 0) {
+    throw new Error(`Tenant not found for slug "${tenantSlug}"`);
+  }
   let updated = 0;
   let skipped = 0;
 
