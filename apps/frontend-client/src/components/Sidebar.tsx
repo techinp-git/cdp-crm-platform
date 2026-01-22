@@ -62,9 +62,7 @@ export function Sidebar() {
     setExpandedGroups((prev) => ({ ...prev, [groupId]: !(prev[groupId] ?? true) }));
   };
 
-  const selectedTenantName =
-    activeTenant?.name || accessibleTenants[0]?.name || '';
-
+  // Fetch tenant details from API (preferred over context for latest data)
   const { data: tenantMe } = useQuery(
     ['tenant-me-for-sidebar', activeTenant?.id],
     async () => {
@@ -72,11 +70,16 @@ export function Sidebar() {
       return res.data as TenantMe;
     },
     {
-      enabled: !!user,
-      staleTime: 60_000,
+      enabled: !!user && !!activeTenant?.id,
+      staleTime: 0, // Always refetch when tenant changes
+      refetchOnMount: 'always',
     }
   );
 
+  // Prefer tenantMe (from API) over activeTenant (from context) for latest data
+  const displayTenantName = tenantMe?.name || activeTenant?.name || accessibleTenants[0]?.name || '';
+  const displayTenantType = tenantMe?.type || activeTenant?.type || accessibleTenants[0]?.type || menuContext.tenantType || '';
+  const selectedTenantName = displayTenantName;
   const logoUrl = tenantMe?.metadata?.logoUrl as string | undefined;
 
   // Show empty state if no menu items are visible
@@ -153,30 +156,20 @@ export function Sidebar() {
             <p className="text-sm text-gray-400">Client Portal</p>
           </div>
         </div>
-        {activeTenant ? (
-          <div className="mt-2">
-            <p className="text-xs text-gray-400">{activeTenant.name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {activeTenant.type || menuContext.tenantType}
-            </p>
+        {displayTenantName ? (
+          <div className="mt-3">
+            <p className="text-base font-semibold text-white">{displayTenantName}</p>
+            {displayTenantType ? (
+              <p className="text-sm text-gray-300 mt-0.5">{displayTenantType}</p>
+            ) : null}
             <div className="mt-2">
               <TenantSwitcher />
             </div>
           </div>
         ) : tenantLoading ? (
           <p className="text-xs text-gray-500 mt-1">Loading...</p>
-        ) : accessibleTenants.length > 0 && accessibleTenants[0] ? (
-          <div className="mt-2">
-            <p className="text-xs text-gray-400">{accessibleTenants[0].name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {accessibleTenants[0].type || menuContext.tenantType}
-            </p>
-            <div className="mt-2">
-              <TenantSwitcher />
-            </div>
-          </div>
         ) : menuContext.tenantType ? (
-          <p className="text-xs text-gray-400 mt-1">{menuContext.tenantType}</p>
+          <p className="text-base font-semibold text-white mt-3">{menuContext.tenantType}</p>
         ) : null}
       </div>
 

@@ -552,7 +552,7 @@ export function UserList() {
                             membership.roles?.map((role: any) => (
                               <span
                                 key={`${membership.tenantId || ''}-${role.id}`}
-                                className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium"
+                                className="px-2 py-1 bg-yellow-100 text-yellow-900 rounded text-xs font-medium"
                               >
                                 {role.name} {membership.tenantName ? `(${membership.tenantName})` : ''}
                               </span>

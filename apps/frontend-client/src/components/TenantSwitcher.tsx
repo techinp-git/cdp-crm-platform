@@ -46,6 +46,9 @@ export function TenantSwitcher() {
                     setIsOpen(false);
                     // Invalidate all queries to reload data with new tenant context
                     queryClient.invalidateQueries();
+                    // Specifically invalidate tenant-me queries to force refetch
+                    queryClient.invalidateQueries(['tenant-me-for-sidebar']);
+                    queryClient.invalidateQueries(['tenant-me']);
                     // Optionally redirect to dashboard
                     navigate('/dashboard', { replace: true });
                   }}
