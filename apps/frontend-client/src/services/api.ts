@@ -95,6 +95,14 @@ export const analyticsApi = {
     api.get('/analytics/customer-growth', { params: { days } }).then((res) => res.data),
 };
 
+export const segmentApi = {
+  list: () => api.get('/segments').then((res) => res.data),
+  get: (id: string) => api.get(`/segments/${id}`).then((res) => res.data),
+  create: (data: any) => api.post('/segments', data).then((res) => res.data),
+  update: (id: string, data: any) => api.patch(`/segments/${id}`, data).then((res) => res.data),
+  delete: (id: string) => api.delete(`/segments/${id}`).then((res) => res.data),
+};
+
 export const tenantApi = {
   get: (id: string) => api.get(`/tenants/${id}`).then((res) => res.data),
   me: () => api.get('/tenants/me').then((res) => res.data),
@@ -105,6 +113,35 @@ export const featureFlagApi = {
   get: (key: string) => api.get(`/feature-flags/${key}`).then((res) => res.data),
   isEnabled: (key: string) =>
     api.get(`/feature-flags/${key}/enabled`).then((res) => res.data.enabled),
+};
+
+export const quotationApi = {
+  list: (params?: any) => api.get('/quotations', { params }).then((res) => res.data),
+  get: (id: string) => api.get(`/quotations/${id}`).then((res) => res.data),
+  insights: () => api.get('/quotations/insights/summary').then((res) => res.data),
+};
+
+export const billingApi = {
+  list: (params?: any) => api.get('/billings', { params }).then((res) => res.data),
+  get: (id: string) => api.get(`/billings/${id}`).then((res) => res.data),
+  insights: () => api.get('/billings/insights/summary').then((res) => res.data),
+};
+
+export const csatApi = {
+  list: (params?: any) => api.get('/csat-data', { params }).then((res) => res.data),
+  get: (id: string) => api.get(`/csat-data/${id}`).then((res) => res.data),
+};
+
+export const lineFollowerApi = {
+  list: (params?: any) => api.get('/line-followers', { params }).then((res) => res.data),
+  get: (id: string) => api.get(`/line-followers/${id}`).then((res) => res.data),
+  getStats: () => api.get('/line-followers/stats').then((res) => res.data),
+};
+
+export const chatCenterApi = {
+  getConversations: (params?: any) => api.get('/chat-center/conversations', { params }).then((res) => res.data),
+  getMessages: (channel: string, externalId: string, params?: any) =>
+    api.get(`/chat-center/conversations/${channel}/${externalId}/messages`, { params }).then((res) => res.data),
 };
 
 export default api;
