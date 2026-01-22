@@ -92,7 +92,13 @@ export function Dashboard() {
     return todayConversations;
   });
 
-  const isLoading = kpisLoading || growthLoading || segmentsLoading || customersLoading || quotationsLoading || billingsLoading || csatLoading || lineFollowersLoading || messengerLoading || todayChatLoading;
+  // Latest conversations (for Recent Conversations section)
+  const { data: latestConversations, isLoading: latestConversationsLoading } = useQuery('latest-conversations-dashboard', async () => {
+    const data = await chatCenterApi.getConversations({ limit: 10 });
+    return Array.isArray(data) ? data : [];
+  });
+
+  const isLoading = kpisLoading || growthLoading || segmentsLoading || customersLoading || quotationsLoading || billingsLoading || csatLoading || lineFollowersLoading || messengerLoading || todayChatLoading || latestConversationsLoading;
 
   if (isLoading) {
     return (
@@ -357,42 +363,70 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* Recent Quotations (B2B) or Segments (B2C) */}
-        {isB2B && quotations.length > 0 ? (
+        {/* Latest Conversations */}
+        {latestConversations && latestConversations.length > 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Quotations ล่าสุด</h2>
-              <Link to="/data/sources/quotation" className="text-primary font-medium text-sm hover:underline">
+              <h2 className="text-lg font-semibold text-gray-900">💬 บทสนทนาล่าสุด</h2>
+              <Link to="/application/chat-center" className="text-primary font-medium text-sm hover:underline">
                 ดูทั้งหมด →
               </Link>
             </div>
             <div className="space-y-3">
-              {quotations.slice(0, 5).map((quotation: any) => (
-                <Link
-                  key={quotation.id}
-                  to={`/data/sources/quotation`}
-                  className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
-                >
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{quotation.quotationNumber || `QT-${quotation.id.substring(0, 8)}`}</div>
-                    <div className="text-sm text-gray-600">
-                      {quotation.customerName || 'ไม่มีชื่อลูกค้า'}
+              {latestConversations.slice(0, 5).map((conversation: any) => {
+                const formatTime = (iso?: string) => {
+                  if (!iso) return '';
+                  try {
+                    const date = new Date(iso);
+                    const now = new Date();
+                    const diffMs = now.getTime() - date.getTime();
+                    const diffMins = Math.floor(diffMs / 60000);
+                    
+                    if (diffMins < 1) return 'เมื่อสักครู่';
+                    if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
+                    if (diffMins < 1440) return `${Math.floor(diffMins / 60)} ชั่วโมงที่แล้ว`;
+                    return date.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' });
+                  } catch {
+                    return iso;
+                  }
+                };
+
+                const getChannelBadge = (channel: string) => {
+                  const ch = channel.toUpperCase();
+                  if (ch === 'LINE') {
+                    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">LINE</span>;
+                  }
+                  if (ch === 'MESSENGER') {
+                    return <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">Messenger</span>;
+                  }
+                  return <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">{ch}</span>;
+                };
+
+                return (
+                  <Link
+                    key={conversation.id}
+                    to={`/application/chat-center`}
+                    className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="font-medium text-gray-900">{conversation.title || conversation.externalId}</div>
+                        {getChannelBadge(conversation.channel)}
+                      </div>
+                      {conversation.lastMessage && (
+                        <div className="text-sm text-gray-600 truncate">
+                          {conversation.lastMessage}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium text-gray-900">
-                      {new Intl.NumberFormat('th-TH', { 
-                        style: 'currency', 
-                        currency: quotation.currency || 'THB', 
-                        maximumFractionDigits: 0 
-                      }).format(Number(quotation.totalAmount) || 0)}
+                    <div className="text-right ml-4">
+                      <div className="text-xs text-gray-500">
+                        {formatTime(conversation.lastAt)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {quotation.status || 'N/A'}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           </div>
         ) : segments && Array.isArray(segments) && segments.length > 0 ? (
